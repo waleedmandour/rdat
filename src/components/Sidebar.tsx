@@ -9,9 +9,10 @@ import {
   Settings, 
   ChevronLeft, 
   ChevronRight,
-  BookMarked
+  HelpCircle
 } from "lucide-react";
 import { cn } from "../lib/utils";
+import { RdatLogo } from "./RdatLogo";
 
 interface SidebarProps {
   activeItem: NavItem;
@@ -50,12 +51,12 @@ export function Sidebar({
         {/* Logo Header */}
         <div className="h-14 border-b border-border flex items-center px-4 justify-between">
           {!collapsed && (
-            <div className="flex items-center gap-2 font-bold text-base text-primary">
-              <BookMarked className="w-5 h-5 text-primary" />
+            <div className="flex items-center gap-2.5 font-bold text-base text-primary">
+              <RdatLogo size={28} className="shrink-0" />
               <span>{t("sidebar.copilot")}</span>
             </div>
           )}
-          {collapsed && <BookMarked className="w-5 h-5 text-primary mx-auto" />}
+          {collapsed && <RdatLogo size={24} className="mx-auto" />}
 
           <button
             onClick={onToggleCollapsed}
@@ -104,7 +105,7 @@ export function Sidebar({
             isRTL && "text-right"
           )}
         >
-          <BookMarked className="w-4 h-4 shrink-0" />
+          <HelpCircle className="w-4 h-4 shrink-0" />
           {!collapsed && <span>{locale === "en" ? "Quick Guide" : "دليل المساعدة"}</span>}
         </button>
 

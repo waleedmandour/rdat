@@ -47,20 +47,36 @@ export function TargetEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestFetchId = useRef(0);
 
-  // Debounced suggestion fetcher — avoids firing on every keystroke
+  // ─── KEY FIX: Use a ref to track the "just-accepted" state ───
+  // When the user accepts a ghost suggestion (Tab / Ctrl+Right), we set this
+  // flag so the next translationText change doesn't trigger a new suggestion fetch.
+  const justAcceptedRef = useRef(false);
+
+  // Debounced suggestion fetcher — avoids firing on every keystroke.
+  // Uses refs for store values to keep the callback identity stable.
+  const engineModeRef = useRef(engineMode);
+  const useCloudFallbackRef = useRef(useCloudFallback);
+  useEffect(() => { engineModeRef.current = engineMode; }, [engineMode]);
+  useEffect(() => { useCloudFallbackRef.current = useCloudFallback; }, [useCloudFallback]);
+
   const fetchSuggestions = useCallback(async (typedText: string) => {
     // 1. First consult our Instant Local Translation Engine (LTE)
-    const localMatch = getLTE().getSuggestion(sourceText, typedText);
-    
-    if (localMatch && localMatch.remainder) {
-      setGhostSuggestion(localMatch.remainder);
-      setSuggestionCandidates([localMatch.match]);
-      setCandidateIndex(0);
-      return;
+    const lte = getLTE();
+    if (lte.getStats().entries === 0) {
+      // LTE has no corpus loaded yet — skip local matching
+    } else {
+      const localMatch = lte.getSuggestion(sourceText, typedText);
+      
+      if (localMatch && localMatch.remainder) {
+        setGhostSuggestion(localMatch.remainder);
+        setSuggestionCandidates([localMatch.match]);
+        setCandidateIndex(0);
+        return;
+      }
     }
 
-    // 2. If LTE has no exact alignment, consult cloud fallback if enabled
-    if (useCloudFallback && engineMode !== "local" && typedText.trim().length > 2) {
+    // 2. If LTE has no match, consult cloud fallback if enabled
+    if (useCloudFallbackRef.current && engineModeRef.current !== "local" && typedText.trim().length > 2) {
       const fetchId = ++latestFetchId.current;
       try {
         const candidates = await generateBurst(sourceText, typedText);
@@ -84,15 +100,29 @@ export function TargetEditor({
       }
     }
 
+    // No suggestion found — clear
     setGhostSuggestion("");
     setSuggestionCandidates([]);
-  }, [sourceText, useCloudFallback, engineMode, generateBurst]);
+  }, [sourceText, generateBurst]);
 
-  // Debounced effect: only trigger suggestion fetch after user stops typing for 350ms
+  // Debounced effect: only trigger suggestion fetch after user stops typing for 400ms.
+  // IMPORTANT: Skips fetch if we just accepted a suggestion (justAcceptedRef).
   useEffect(() => {
-    if (!isActive || !translationText) {
+    if (!isActive) {
       setGhostSuggestion("");
       setSuggestionCandidates([]);
+      return;
+    }
+
+    if (!translationText || !translationText.trim()) {
+      setGhostSuggestion("");
+      setSuggestionCandidates([]);
+      return;
+    }
+
+    // If we just accepted a suggestion, skip this cycle and reset the flag
+    if (justAcceptedRef.current) {
+      justAcceptedRef.current = false;
       return;
     }
 
@@ -103,7 +133,7 @@ export function TargetEditor({
 
     debounceRef.current = setTimeout(() => {
       fetchSuggestions(translationText);
-    }, 350);
+    }, 400);
 
     return () => {
       if (debounceRef.current) {
@@ -112,14 +142,31 @@ export function TargetEditor({
     };
   }, [isActive, translationText, fetchSuggestions]);
 
+  // When segment becomes inactive, clear suggestions
+  useEffect(() => {
+    if (!isActive) {
+      setGhostSuggestion("");
+      setSuggestionCandidates([]);
+      setCandidateIndex(0);
+      justAcceptedRef.current = false;
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
+    }
+  }, [isActive]);
+
   // Keybindings handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     // 1. Tab accepts the full suggestion
     if (e.key === "Tab" && ghostSuggestion) {
       e.preventDefault();
+      justAcceptedRef.current = true; // Prevent re-fetch
       const acceptedText = translationText + ghostSuggestion;
       onChange(acceptedText);
       setGhostSuggestion("");
+      setSuggestionCandidates([]);
+      return;
     }
 
     // 2. Ctrl + Right Arrow accepts next word of prediction
@@ -137,8 +184,19 @@ export function TargetEditor({
         nextPortion = ghostSuggestion.substring(0, leadingSpacesCount + firstSpaceIdx + 1);
       }
 
+      justAcceptedRef.current = true; // Prevent re-fetch for partial acceptance
       const updatedText = translationText + nextPortion;
       onChange(updatedText);
+
+      // Update ghost to show remaining portion after word acceptance
+      const remainingGhost = ghostSuggestion.substring(nextPortion.length);
+      if (remainingGhost.trim()) {
+        setGhostSuggestion(remainingGhost);
+      } else {
+        setGhostSuggestion("");
+        setSuggestionCandidates([]);
+      }
+      return;
     }
 
     // 3. Alt + ] cycles translation candidates
@@ -153,6 +211,7 @@ export function TargetEditor({
       } else {
         setGhostSuggestion(" " + nextCandidate);
       }
+      return;
     }
 
     // 4. Escape dismisses suggestion
@@ -160,12 +219,14 @@ export function TargetEditor({
       e.preventDefault();
       setGhostSuggestion("");
       setSuggestionCandidates([]);
+      return;
     }
 
     // 5. Ctrl + Enter confirms the segment
     if (e.key === "Enter" && e.ctrlKey) {
       e.preventDefault();
       onConfirm();
+      return;
     }
   }
 
@@ -233,7 +294,7 @@ export function TargetEditor({
         />
 
         {/* Predictive ghost translation overlay */}
-        {ghostSuggestion && (
+        {ghostSuggestion && isActive && (
           <div
             className="absolute bottom-3 left-4 pointer-events-none select-none text-[10px] font-mono text-primary/40 bg-primary/5 border border-primary/20 px-2.5 py-0.5 rounded-md flex items-center gap-1.5"
             dir={isRTL ? "rtl" : "ltr"}

@@ -2,6 +2,7 @@ import React from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { BookOpen, Languages, Sparkles, Command, Github, Mail, GraduationCap, Globe } from "lucide-react";
 import { motion } from "motion/react";
+import { RdatLogo } from "./RdatLogo";
 
 interface WelcomeTabProps {
   onStart: () => void;
@@ -19,6 +20,9 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
       <div className="max-w-4xl mx-auto space-y-12">
         {/* Hero Header */}
         <div className="text-center space-y-4">
+          <div className="flex justify-center mb-2">
+            <RdatLogo size={64} />
+          </div>
           <h1 className="text-4xl md:text-6xl font-black text-foreground tracking-tight leading-tight">
             {t("welcome.greeting")}
           </h1>

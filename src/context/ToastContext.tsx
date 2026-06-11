@@ -31,17 +31,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         <AnimatePresence>
           {toasts.map((toast) => {
             let icon = <Info className="w-4 h-4 text-primary" />;
-            let borderClass = "border-primary/20 bg-background/95 text-foreground";
+            let borderClass = "border-primary/20 dark:bg-[#14161b] bg-background/95 text-foreground";
             
             if (toast.type === "success") {
-              icon = <CheckCircle2 className="w-4 h-4 text-emerald-500" />;
-              borderClass = "border-emerald-500/20 dark:bg-emerald-500/10 bg-emerald-50 text-foreground";
+              icon = <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-emerald-400" />;
+              borderClass = "border-emerald-500/20 dark:bg-emerald-950/40 bg-emerald-50 text-foreground";
             } else if (toast.type === "error") {
-              icon = <AlertCircle className="w-4 h-4 text-rose-500" />;
-              borderClass = "border-rose-500/20 dark:bg-rose-500/10 bg-rose-50 text-foreground";
+              icon = <AlertCircle className="w-4 h-4 text-rose-400 dark:text-rose-400" />;
+              borderClass = "border-rose-500/20 dark:bg-rose-950/40 bg-rose-50 text-foreground";
             } else if (toast.type === "warning") {
-              icon = <AlertCircle className="w-4 h-4 text-amber-500" />;
-              borderClass = "border-amber-500/20 dark:bg-amber-500/10 bg-amber-50 text-foreground";
+              icon = <AlertCircle className="w-4 h-4 text-amber-400 dark:text-amber-400" />;
+              borderClass = "border-amber-500/20 dark:bg-amber-950/40 bg-amber-50 text-foreground";
             }
 
             return (
