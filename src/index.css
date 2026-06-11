@@ -1,0 +1,77 @@
+@import "tailwindcss";
+
+@theme {
+  --color-background: var(--bg-color);
+  --color-foreground: var(--fg-color);
+  --color-surface: var(--surface-color);
+  --color-surface-hover: var(--surface-hover-color);
+  --color-border: var(--border-color);
+  --color-border-hover: var(--border-hover-color);
+  --color-primary: #6366f1;
+  --color-primary-foreground: #ffffff;
+}
+
+:root {
+  --bg-color: #f8fafc;
+  --fg-color: #0f172a;
+  --surface-color: #ffffff;
+  --surface-hover-color: #f1f5f9;
+  --border-color: #e2e8f0;
+  --border-hover-color: #cbd5e1;
+}
+
+.dark {
+  --bg-color: #0A0B0E;
+  --fg-color: #cbd5e1;
+  --surface-color: #111318;
+  --surface-hover-color: #1a1d24;
+  --border-color: rgba(255, 255, 255, 0.1);
+  --border-hover-color: rgba(255, 255, 255, 0.2);
+  
+  color-scheme: dark;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--fg-color);
+  font-family: ui-sans-serif, system-ui, sans-serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Custom fade animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: scale(0.98); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.15s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes slideDown {
+  from { transform: translateY(-100%); }
+  to { transform: translateY(0); }
+}
+
+.animate-slide-down {
+  animation: slideDown 0.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Scrollbar customizations */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--border-hover-color);
+}

@@ -1,0 +1,6 @@
+{
+  "name": "RDAT Copilot",
+  "description": "Professional English-Arabic Computer-Assisted Translation assistant with local phrase tables, GTR databases, and predictive ghost-text.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
