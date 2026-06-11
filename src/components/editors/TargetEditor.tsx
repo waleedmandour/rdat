@@ -44,8 +44,10 @@ export function TargetEditor({
   const [candidateIndex, setCandidateIndex] = useState(0);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const latestFetchId = useRef(0);
 
-  // Trigger local matching and/or API candidate bursts
+  // Debounced suggestion fetcher — avoids firing on every keystroke
   const fetchSuggestions = useCallback(async (typedText: string) => {
     // 1. First consult our Instant Local Translation Engine (LTE)
     const localMatch = getLTE().getSuggestion(sourceText, typedText);
@@ -58,9 +60,12 @@ export function TargetEditor({
     }
 
     // 2. If LTE has no exact alignment, consult cloud fallback if enabled
-    if (useCloudFallback && engineMode !== "local" && typedText.trim().length > 1) {
+    if (useCloudFallback && engineMode !== "local" && typedText.trim().length > 2) {
+      const fetchId = ++latestFetchId.current;
       try {
         const candidates = await generateBurst(sourceText, typedText);
+        // Discard stale results if a newer fetch was triggered
+        if (fetchId !== latestFetchId.current) return;
         if (candidates && candidates.length > 0) {
           setSuggestionCandidates(candidates);
           setCandidateIndex(0);
@@ -83,13 +88,28 @@ export function TargetEditor({
     setSuggestionCandidates([]);
   }, [sourceText, useCloudFallback, engineMode, generateBurst]);
 
+  // Debounced effect: only trigger suggestion fetch after user stops typing for 350ms
   useEffect(() => {
-    if (isActive && translationText) {
-      fetchSuggestions(translationText);
-    } else {
+    if (!isActive || !translationText) {
       setGhostSuggestion("");
       setSuggestionCandidates([]);
+      return;
     }
+
+    // Clear any pending debounce timer
+    if (debounceRef.current) {
+      clearTimeout(debounceRef.current);
+    }
+
+    debounceRef.current = setTimeout(() => {
+      fetchSuggestions(translationText);
+    }, 350);
+
+    return () => {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+    };
   }, [isActive, translationText, fetchSuggestions]);
 
   // Keybindings handler
@@ -147,7 +167,7 @@ export function TargetEditor({
       e.preventDefault();
       onConfirm();
     }
-  };
+  }
 
   // Text-To-Speech (audio pronunciation) for student practice
   const handlePronunciation = () => {
@@ -248,7 +268,7 @@ export function TargetEditor({
           <div className="flex items-center gap-3">
             {suggestionCandidates.length > 0 && (
               <div className="px-2 py-0.5 dark:bg-white/10 bg-primary/10 rounded text-[9px] text-primary font-mono tracking-tighter">
-                MATCH 94%
+                {isRTL ? "مطابقة" : "MATCH"} 94%
               </div>
             )}
             <button

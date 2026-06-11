@@ -189,7 +189,7 @@ export function SourceEditor({
               className={cn(
                 "p-4 border-l-2 transition-all duration-200 cursor-pointer text-left select-text",
                 isActive
-                  ? "dark:bg-primary/10 bg-primary/5 border-primary text-slate-100 opacity-100 pl-4 py-3"
+                  ? "dark:bg-primary/15 bg-primary/5 border-primary text-foreground opacity-100 pl-4 py-3"
                   : isHovered
                   ? "dark:bg-white/[0.02] bg-surface-hover border-slate-500/30 opacity-80"
                   : "border-transparent opacity-40 hover:opacity-70"

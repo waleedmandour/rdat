@@ -106,7 +106,7 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 select-text">
               <div className="space-y-0.5">
                 <div className="text-xs font-black text-foreground">
-                  {isRTL ? "د. وليد غريب أبو مندور" : "Dr. Waleed Mandour"}
+                  {isRTL ? "د. وليد أبو مندور" : "Dr. Waleed Mandour"}
                 </div>
                 <div className="text-[10.5px] text-muted-foreground flex items-center gap-1">
                   <span>{isRTL ? "أستاذ مساعد، جامعة السلطان قابوس، سلطنة عمان" : "Assistant Professor, Sultan Qaboos University, Oman"}</span>
@@ -130,15 +130,15 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
                   {isRTL ? "مستودع الكود والمجتمع الأكاديمي" : "Academic Code Core & Repository"}
                 </div>
                 <div className="text-[10.5px] text-muted-foreground break-all font-mono text-[10px]">
-                  https://github.com/waleedmandour/rdat-copilot
+                  https://github.com/waleedmandour/rdat
                 </div>
               </div>
 
               <a
-                href="https://github.com/waleedmandour/rdat-copilot"
+                href="https://github.com/waleedmandour/rdat"
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-white bg-foreground dark:bg-slate-800 hover:bg-slate-700 dark:hover:bg-slate-755 px-3.5 py-1.5 rounded-xl transition-all shadow-md cursor-pointer shrink-0"
+                className="flex items-center gap-1.5 text-[10px] uppercase font-bold text-white bg-foreground dark:bg-slate-800 hover:bg-slate-700 dark:hover:bg-slate-700 px-3.5 py-1.5 rounded-xl transition-all shadow-md cursor-pointer shrink-0"
               >
                 <Github className="w-3.5 h-3.5" />
                 <span>Visit Repository</span>

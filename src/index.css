@@ -7,7 +7,7 @@
   --color-surface-hover: var(--surface-hover-color);
   --color-border: var(--border-color);
   --color-border-hover: var(--border-hover-color);
-  --color-primary: #6366f1;
+  --color-primary: var(--primary-color);
   --color-primary-foreground: #ffffff;
 }
 
@@ -18,15 +18,17 @@
   --surface-hover-color: #f1f5f9;
   --border-color: #e2e8f0;
   --border-hover-color: #cbd5e1;
+  --primary-color: #6366f1;
 }
 
 .dark {
   --bg-color: #0A0B0E;
-  --fg-color: #cbd5e1;
+  --fg-color: #e2e8f0;
   --surface-color: #111318;
   --surface-hover-color: #1a1d24;
   --border-color: rgba(255, 255, 255, 0.1);
   --border-hover-color: rgba(255, 255, 255, 0.2);
+  --primary-color: #818cf8;
   
   color-scheme: dark;
 }

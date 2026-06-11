@@ -80,7 +80,7 @@ export function QuickGuideModal({ open, onClose }: QuickGuideModalProps) {
           </div>
           <p className="text-slate-400 leading-relaxed font-sans">
             {isRTL 
-              ? "تم تطوير الأداة تحت إشراف د. وليد غريب أبو مندور لدعم الباحثين والمترجمين في المجال الأكاديمي." 
+              ? "تم تطوير الأداة تحت إشراف د. وليد أبو مندور لدعم الباحثين والمترجمين في المجال الأكاديمي." 
               : "Developed under the guidance of Dr. Waleed Mandour to support academic researchers and translator corpora."}
           </p>
           <div className="flex flex-wrap items-center gap-2 pt-1">
@@ -92,13 +92,13 @@ export function QuickGuideModal({ open, onClose }: QuickGuideModalProps) {
               <span>w.abumandour@squ.edu.om</span>
             </a>
             <a
-              href="https://github.com/waleedmandour/rdat-copilot"
+              href="https://github.com/waleedmandour/rdat"
               target="_blank"
               rel="noreferrer"
               className="flex items-center gap-1 text-[9.5px] font-bold text-slate-300 hover:text-white border dark:border-white/5 border-border px-2 py-1 rounded-lg dark:bg-[#111318] cursor-pointer"
             >
               <Github className="w-3 h-3" />
-              <span>rdat-copilot</span>
+              <span>rdat</span>
             </a>
           </div>
         </div>

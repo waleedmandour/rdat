@@ -112,7 +112,7 @@ export const translations = {
       segments: "المقاطع",
       words: "الكلمات",
       ready: "جاهز",
-      footer: "مساعد الترجمة RDAT المساعد 1.0 | إنكليزي ↔ عربي",
+      footer: "مساعد RDAT 1.0 | إنكليزي ↔ عربي",
     },
     workspace: {
       title: {

@@ -492,7 +492,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
                 <h3 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">
                   {isRTL ? "ملاحظات سياقية ومقترحات" : "Contextual Notes"}
                 </h3>
-                <p className="text-[11px] leading-relaxed text-slate-400 italic dark:bg-white/[0.01] bg-muted/30 p-3 rounded.lg border dark:border-white/5 border-border">
+                <p className="text-[11px] leading-relaxed text-slate-400 italic dark:bg-white/[0.01] bg-muted/30 p-3 rounded-lg border dark:border-white/5 border-border">
                   {isRTL 
                     ? "\"CAT\" يجب ذكرها كاملة في المرة الأولى ثم استخدام الاختصار بين قوسين للتوضيح."
                     : "\"CAT\" should remain as an acronym in English parentheses after the first Arabic mention for clarity in academic texts."}
