@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { getLTE } from "../../lib/local-translation-engine";
+import {
+  isModelLoaded,
+  generateLocalTranslation,
+  getLoadedModelId,
+} from "../../lib/local-llm-engine";
 import { useGemini } from "../../hooks/useGemini";
 import { useSettingsStore } from "../../stores/settings-store";
 import { 
@@ -8,7 +13,8 @@ import {
   HelpCircle, 
   CornerDownLeft, 
   ChevronRight, 
-  Volume2
+  Volume2,
+  Cpu
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -60,11 +66,11 @@ export function TargetEditor({
   useEffect(() => { useCloudFallbackRef.current = useCloudFallback; }, [useCloudFallback]);
 
   const fetchSuggestions = useCallback(async (typedText: string) => {
-    // 1. First consult our Instant Local Translation Engine (LTE)
+    // ── TIER 1: LTE Dictionary Match (instant, <5ms) ──
+    // The Local Translation Engine uses exact/partial/n-gram matching against
+    // the user's glossary corpus. It's the fastest tier and always runs first.
     const lte = getLTE();
-    if (lte.getStats().entries === 0) {
-      // LTE has no corpus loaded yet — skip local matching
-    } else {
+    if (lte.getStats().entries > 0) {
       const localMatch = lte.getSuggestion(sourceText, typedText);
       
       if (localMatch && localMatch.remainder) {
@@ -75,7 +81,44 @@ export function TargetEditor({
       }
     }
 
-    // 2. If LTE has no match, consult cloud fallback if enabled
+    // ── TIER 2: Local LLM On-Device Inference (~200-2000ms via WebGPU) ──
+    // If a local model is loaded and the engine mode is not "cloud",
+    // we ask the on-device LLM for a translation suggestion. This runs
+    // entirely in the browser using WebGPU — no data leaves the device.
+    if (isModelLoaded() && engineModeRef.current !== "cloud") {
+      const fetchId = ++latestFetchId.current;
+      try {
+        const llmCandidates = await generateLocalTranslation(sourceText, typedText);
+        // Discard stale results if a newer fetch was triggered
+        if (fetchId !== latestFetchId.current) return;
+
+        if (llmCandidates.length > 0) {
+          setSuggestionCandidates(llmCandidates);
+          setCandidateIndex(0);
+
+          const best = llmCandidates[0];
+          // Compute ghost remainder by removing the typed prefix
+          if (typedText.trim() && best.startsWith(typedText.trim())) {
+            setGhostSuggestion(best.substring(typedText.trim().length));
+          } else if (typedText.trim() && best.includes(typedText.trim())) {
+            // If the typed text appears somewhere in the translation, show the rest
+            const idx = best.indexOf(typedText.trim());
+            setGhostSuggestion(best.substring(idx + typedText.trim().length));
+          } else {
+            // No prefix overlap — show the full suggestion as ghost
+            setGhostSuggestion(" " + best);
+          }
+          return;
+        }
+      } catch (e) {
+        console.warn("[TargetEditor] Local LLM inference failed:", e);
+        // Fall through to cloud fallback
+      }
+    }
+
+    // ── TIER 3: Cloud Gemini Fallback ──
+    // If LTE and Local LLM didn't produce results, and cloud is enabled,
+    // we call the Gemini API for a cloud-based translation suggestion.
     if (useCloudFallbackRef.current && engineModeRef.current !== "local" && typedText.trim().length > 2) {
       const fetchId = ++latestFetchId.current;
       try {
@@ -100,7 +143,7 @@ export function TargetEditor({
       }
     }
 
-    // No suggestion found — clear
+    // No suggestion found from any tier — clear
     setGhostSuggestion("");
     setSuggestionCandidates([]);
   }, [sourceText, generateBurst]);
@@ -300,7 +343,9 @@ export function TargetEditor({
             dir={isRTL ? "rtl" : "ltr"}
           >
             <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
-            <span>[Tab] {isRTL ? "إتمام تلقائي" : "Auto-complete"} ({loadedModel ? loadedModel.toUpperCase() : "LTE"}): {ghostSuggestion}</span>
+            <span>[Tab] {isRTL ? "إتمام تلقائي" : "Auto-complete"} ({loadedModel && isModelLoaded() ? (
+              <span className="inline-flex items-center gap-0.5"><Cpu className="w-3 h-3" />{loadedModel.toUpperCase()}</span>
+            ) : "LTE"}): {ghostSuggestion}</span>
           </div>
         )}
       </div>
