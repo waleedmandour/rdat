@@ -6,7 +6,7 @@ interface WorkspaceState {
   currentSegmentIndex: number;
   highlightedSegmentIndex: number | null;
   setSourceText: (text: string) => void;
-  setTargetTexts: (texts: string[]) => void;
+  setTargetTexts: (textsOrUpdater: string[] | ((prev: string[]) => string[])) => void;
   setTargetTextAtIndex: (index: number, text: string) => void;
   setCurrentSegmentIndex: (index: number) => void;
   setHighlightedSegmentIndex: (index: number | null) => void;
@@ -23,12 +23,17 @@ Local language models on device ensure data privacy and provide fast offline ter
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   sourceText: DEFAULT_SOURCE,
-  targetTexts: Array(10).fill(""),
+  targetTexts: Array(4).fill(""),
   currentSegmentIndex: 0,
   highlightedSegmentIndex: null,
 
   setSourceText: (sourceText) => set({ sourceText }),
-  setTargetTexts: (targetTexts) => set({ targetTexts }),
+  setTargetTexts: (textsOrUpdater) => set((state) => {
+    const newTargetTexts = typeof textsOrUpdater === 'function'
+      ? textsOrUpdater(state.targetTexts)
+      : textsOrUpdater;
+    return { targetTexts: newTargetTexts };
+  }),
   setTargetTextAtIndex: (index, text) => set((state) => {
     const updated = [...state.targetTexts];
     updated[index] = text;

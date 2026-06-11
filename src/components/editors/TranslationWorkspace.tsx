@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from "react";
+import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 import { useWorkspaceStore } from "../../stores/workspace-store";
@@ -68,6 +68,83 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
   const [tutorAnalyses, setTutorAnalyses] = useState<Record<number, TutorAnalysis | null>>({});
   const [tutorLoading, setTutorLoading] = useState(false);
   const { generateTutorExplanation } = useGemini();
+
+  // ─── CRITICAL FIX: Prevent IndexedDB from overwriting user typing ───
+  // Only load from DB once on mount, or when sentences.length changes (new document).
+  // Never re-load while the user is actively typing.
+  const initialLoadDoneRef = useRef(false);
+  const prevSentencesLenRef = useRef(0);
+
+  // Sync targetTexts array length with sentences — only when lengths differ
+  const sentencesLen = sentences.length;
+  useEffect(() => {
+    // Use functional update to avoid depending on targetTexts
+    setTargetTexts((prev) => {
+      if (prev.length === sentencesLen) return prev;
+      const updated = [...prev];
+      while (updated.length < sentencesLen) updated.push("");
+      return updated.slice(0, sentencesLen);
+    });
+  }, [sentencesLen, setTargetTexts]);
+
+  // Load existing confirmed segment entries from IndexedDB — ONLY on mount or document change
+  const loadConfirmedSegments = useCallback(async (currentSentencesLen: number) => {
+    try {
+      const dbEntries = await getAllofStore<SegmentEntry>("segments");
+      const confirmedMap: Record<number, boolean> = {};
+      const dbTexts: Record<number, string> = {};
+
+      for (const entry of dbEntries) {
+        if (
+          entry.segment_index !== undefined &&
+          entry.segment_index < currentSentencesLen
+        ) {
+          confirmedMap[entry.segment_index] = entry.status === "confirmed";
+          if (entry.target) {
+            dbTexts[entry.segment_index] = entry.target;
+          }
+        }
+      }
+
+      setConfirmedIndices(confirmedMap);
+
+      // Only fill in DB texts for slots that are currently empty — never overwrite user input
+      setTargetTexts((prev) => {
+        const updated = [...prev];
+        // Ensure correct length
+        while (updated.length < currentSentencesLen) updated.push("");
+        for (const [idxStr, text] of Object.entries(dbTexts)) {
+          const i = Number(idxStr);
+          if (i < updated.length && !updated[i].trim()) {
+            updated[i] = text;
+          }
+        }
+        return updated.slice(0, currentSentencesLen);
+      });
+    } catch (e) {
+      console.warn("[Workspace] Failed to pre-populate from DB:", e);
+    }
+  }, [setTargetTexts]);
+
+  // Load glossary entries — only depends on stable functions
+  const loadGlossaryEntries = useCallback(async () => {
+    try {
+      const list = await getAllofStore<GlossaryEntry>("glossary");
+      setGlossaryEntries(list);
+    } catch (e) {
+      console.warn("[Workspace] Glossary fetch omitted/failed:", e);
+    }
+  }, []);
+
+  // Run initial load once, and re-run only when sentences.length changes (new document loaded)
+  useEffect(() => {
+    if (!initialLoadDoneRef.current || prevSentencesLenRef.current !== sentencesLen) {
+      initialLoadDoneRef.current = true;
+      prevSentencesLenRef.current = sentencesLen;
+      loadConfirmedSegments(sentencesLen);
+      loadGlossaryEntries();
+    }
+  }, [sentencesLen, loadConfirmedSegments, loadGlossaryEntries]);
 
   // Run Translation Tutor and parse feedback
   const handleRunTutor = async () => {
@@ -150,58 +227,6 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       setTutorLoading(false);
     }
   };
-
-  // Sync state arrays with the segmented sentence length
-  useEffect(() => {
-    if (targetTexts.length !== sentences.length) {
-      const updated = [...targetTexts];
-      while (updated.length < sentences.length) {
-        updated.push("");
-      }
-      setTargetTexts(updated.slice(0, sentences.length));
-    }
-  }, [sentences, targetTexts, setTargetTexts]);
-
-  // Load existing confirmed segment entries from IndexedDB on login
-  const loadConfirmedSegments = useCallback(async () => {
-    try {
-      const dbEntries = await getAllofStore<SegmentEntry>("segments");
-      const confirmedMap: Record<number, boolean> = {};
-      const updatedTexts = [...targetTexts];
-
-      for (const entry of dbEntries) {
-        if (
-          entry.segment_index !== undefined &&
-          entry.segment_index < sentences.length
-        ) {
-          confirmedMap[entry.segment_index] = entry.status === "confirmed";
-          if (entry.target) {
-            updatedTexts[entry.segment_index] = entry.target;
-          }
-        }
-      }
-
-      setConfirmedIndices(confirmedMap);
-      setTargetTexts(updatedTexts);
-    } catch (e) {
-      console.warn("[Workspace] Failed to pre-populate from DB:", e);
-    }
-  }, [sentences.length, setTargetTexts, targetTexts]);
-
-  // Load glossary entries on container startup
-  const loadGlossaryEntries = useCallback(async () => {
-    try {
-      const list = await getAllofStore<GlossaryEntry>("glossary");
-      setGlossaryEntries(list);
-    } catch (e) {
-      console.warn("[Workspace] Glossary fetch omitted/failed:", e);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadConfirmedSegments();
-    loadGlossaryEntries();
-  }, [loadConfirmedSegments, loadGlossaryEntries, segmentCount]);
 
   // Confirms a sentence translation and persists it to IndexedDB
   const handleConfirmSegment = async (idx: number) => {
