@@ -1,8 +1,10 @@
 import React from "react";
 import { useLanguage } from "../context/LanguageContext";
-import { BookOpen, Languages, Sparkles, Command, Github, Mail, GraduationCap, Globe } from "lucide-react";
+import { BookOpen, Languages, Sparkles, Command, Github, Mail, GraduationCap, Globe, Key, Cpu, Cloud, CheckCircle2 } from "lucide-react";
 import { motion } from "motion/react";
 import { RdatLogo } from "./RdatLogo";
+import { useSettingsStore } from "../stores/settings-store";
+import { isWebGPUAvailable } from "../lib/local-llm-engine";
 
 interface WelcomeTabProps {
   onStart: () => void;
@@ -86,6 +88,9 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
             ))}
           </div>
         </div>
+
+        {/* Getting Started Checklist */}
+        <SetupChecklist />
 
         {/* Action Button */}
         <div className="text-center pt-2">
@@ -188,4 +193,107 @@ SOFTWARE.`}
     </div>
   );
 }
+
+/**
+ * Setup Checklist — Guides first-time users to configure the app
+ * for optimal ghost-text suggestions.
+ */
+function SetupChecklist() {
+  const { locale } = useLanguage();
+  const isRTL = locale === "ar";
+  const geminiApiKey = useSettingsStore((s) => s.geminiApiKey);
+  const loadedModel = useSettingsStore((s) => s.loadedModel);
+  const [webgpuAvailable, setWebgpuAvailable] = React.useState<boolean | null>(null);
+
+  React.useEffect(() => {
+    isWebGPUAvailable().then(setWebgpuAvailable);
+  }, []);
+
+  const steps = [
+    {
+      icon: Key,
+      label: isRTL ? "مفتاح Gemini API" : "Gemini API Key",
+      desc: isRTL
+        ? "أدخل مفتاحك في لوحة مفاتيح API لتفعيل الترجمة السحابية"
+        : "Enter your key in the API Keys panel to enable cloud translation",
+      done: !!geminiApiKey,
+      href: "#api-keys",
+    },
+    {
+      icon: Cpu,
+      label: isRTL ? "تحميل نموذج محلي" : "Load Local Model",
+      desc: isRTL
+        ? "حمّل نموذج Qwen 1.5B أو Gemma 2B للترجمة بدون اتصال"
+        : "Download Qwen 1.5B or Gemma 2B for offline translation",
+      done: !!loadedModel,
+      href: "#models",
+    },
+    {
+      icon: Cloud,
+      label: isRTL ? "تفعيل المحرك الهجين" : "Enable Hybrid Engine",
+      desc: isRTL
+        ? "يجمع بين السرعة المحلية والدقة السحابية لأفضل النتائج"
+        : "Combines local speed + cloud accuracy for best results",
+      done: !!geminiApiKey || !!loadedModel,
+      href: "#models",
+    },
+  ];
+
+  const completedCount = steps.filter((s) => s.done).length;
+
+  return (
+    <div className="dark:bg-[#111318] bg-surface border dark:border-white/5 border-border p-5 rounded-2xl space-y-4">
+      <div className="flex items-center justify-between">
+        <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500 flex items-center gap-2">
+          <Sparkles className="w-4 h-4 text-primary" />
+          <span>{isRTL ? "إعداد البدء السريع" : "Quick Start Setup"}</span>
+        </h3>
+        <span
+          className={`text-[10px] font-black px-2.5 py-0.5 rounded-full ${
+            completedCount === steps.length
+              ? "bg-emerald-500/10 text-emerald-500 border border-emerald-500/20"
+              : "bg-primary/10 text-primary border border-primary/20"
+          }`}
+        >
+          {completedCount}/{steps.length} {isRTL ? "مكتمل" : "done"}
+        </span>
+      </div>
+
+      {webgpuAvailable === false && (
+        <div className="p-3 rounded-xl border border-amber-500/30 bg-amber-500/5 text-[11px] text-amber-500 flex items-start gap-2">
+          <Cpu className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>
+            {isRTL
+              ? "WebGPU غير متاح في هذا المتصفح. النماذج المحلية لن تعمل. يرجى استخدام Chrome 113+ أو Edge 113+. يمكنك الاستمرار مع الترجمة السحابية فقط."
+              : "WebGPU is not available in this browser. Local models won't run. Use Chrome 113+ or Edge 113+. You can still use cloud translation only."}
+          </span>
+        </div>
+      )}
+
+      <div className="space-y-2.5">
+        {steps.map((step, idx) => (
+          <div
+            key={idx}
+            className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
+              step.done
+                ? "border-emerald-500/20 bg-emerald-500/5"
+                : "border-border dark:border-white/5 bg-background/50 dark:bg-[#0A0B0E]"
+            }`}
+          >
+            <div className={`mt-0.5 shrink-0 ${step.done ? "text-emerald-500" : "text-muted-foreground"}`}>
+              {step.done ? <CheckCircle2 className="w-4 h-4" /> : <step.icon className="w-4 h-4" />}
+            </div>
+            <div className="flex-1 min-w-0">
+              <div className={`text-xs font-bold ${step.done ? "text-emerald-500" : "text-foreground"}`}>
+                {step.label}
+              </div>
+              <div className="text-[10.5px] text-muted-foreground mt-0.5">{step.desc}</div>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default WelcomeTab;
