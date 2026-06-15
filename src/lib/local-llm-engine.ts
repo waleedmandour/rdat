@@ -35,11 +35,6 @@ export const MODEL_MAP: Record<string, string> = {
   "llama3-8b": "Llama-3.1-8B-Instruct-q4f16_1-MLC",
 };
 
-/** Reverse map: MLC model ID → RDAT catalog ID */
-const REVERSE_MODEL_MAP: Record<string, string> = Object.fromEntries(
-  Object.entries(MODEL_MAP).map(([rdatId, mlcId]) => [mlcId, rdatId])
-);
-
 // ─── Engine State ──────────────────────────────────────────────────
 
 let engine: MLCEngine | null = null;

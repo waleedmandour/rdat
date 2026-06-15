@@ -1,7 +1,7 @@
 import React, { createContext, useContext, useState, useCallback } from "react";
 import { Toast, ToastType, ToastContextType } from "../types";
 import { AnimatePresence, motion } from "motion/react";
-import { X, CheckCircle2, AlertCircle, Info, HelpCircle } from "lucide-react";
+import { X, CheckCircle2, AlertCircle, Info } from "lucide-react";
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
 

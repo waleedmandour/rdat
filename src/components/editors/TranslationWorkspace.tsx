@@ -8,16 +8,13 @@ import { SourceEditor } from "./SourceEditor";
 import { TargetEditor } from "./TargetEditor";
 import { useGemini } from "../../hooks/useGemini";
 import { SegmentEntry, GlossaryEntry, TutorAnalysis } from "../../types";
-import { 
-  CheckCircle2, 
-  FileText, 
-  ExternalLink, 
+import {
+  CheckCircle2,
   Sparkles,
   Download,
   Check,
   Search,
   BookMarked,
-  Info,
   GraduationCap
 } from "lucide-react";
 import { cn } from "../../lib/utils";

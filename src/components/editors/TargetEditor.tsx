@@ -5,7 +5,6 @@ import {
   isModelLoaded,
   generateLocalTranslation,
   generateRAGTranslation,
-  getLoadedModelId,
   prefetchTranslation,
   getPrefetch,
 } from "../../lib/local-llm-engine";

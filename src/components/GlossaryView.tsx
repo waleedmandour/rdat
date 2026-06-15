@@ -1,19 +1,16 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useDualStorage } from "../hooks/useDualStorage";
-import { 
-  Upload, 
-  Database, 
-  Search, 
-  ArrowRight, 
-  CheckCircle2, 
-  XSquare, 
+import {
+  Upload,
+  Database,
+  Search,
+  CheckCircle2,
+  XSquare,
   Trash2,
-  Download,
   AlertCircle
 } from "lucide-react";
 import { GlossaryEntry } from "../types";
-import { cn } from "../lib/utils";
 
 export function GlossaryView() {
   const { locale, t } = useLanguage();

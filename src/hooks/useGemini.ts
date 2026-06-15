@@ -1,13 +1,6 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { useSettingsStore } from "../stores/settings-store";
 import { TutorAnalysis } from "../types";
-
-interface GeminiResult {
-  match: string;
-  source: string;
-  remainder: string;
-  score: number;
-}
 
 /**
  * Hook for Cloud Gemini API calls (Tier 2 of the ghost-text pipeline).
@@ -22,7 +15,6 @@ export function useGemini() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const geminiApiKey = useSettingsStore((state) => state.geminiApiKey);
-  const retryCountRef = useRef(0);
   const MAX_RETRIES = 2;
 
   const fetchWithRetry = useCallback(

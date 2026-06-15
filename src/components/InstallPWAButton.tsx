@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLanguage } from "../context/LanguageContext";
-import { HardDrive, X, Sparkles, Download } from "lucide-react";
+import { X, Sparkles, Download } from "lucide-react";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;

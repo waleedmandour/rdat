@@ -1,12 +1,11 @@
 import React from "react";
 import { useLanguage } from "../context/LanguageContext";
-import { 
+import {
   Database,
-  Wifi, 
-  WifiOff, 
-  RefreshCw, 
-  Cpu, 
-  CloudCheck 
+  Wifi,
+  WifiOff,
+  RefreshCw,
+  Cpu
 } from "lucide-react";
 import { 
   EngineMode, 

@@ -1,7 +1,7 @@
 import React from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useSettingsStore } from "../stores/settings-store";
-import { Sliders, Languages, Trash2, HelpCircle } from "lucide-react";
+import { Sliders, Trash2 } from "lucide-react";
 import { useDualStorage } from "../hooks/useDualStorage";
 import { useToast } from "../context/ToastContext";
 

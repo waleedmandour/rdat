@@ -1,7 +1,6 @@
 import React from "react";
 import { useLanguage } from "../context/LanguageContext";
-import { BookOpen, Languages, Sparkles, Command, Github, Mail, GraduationCap, Globe, Key, Cpu, Cloud, CheckCircle2 } from "lucide-react";
-import { motion } from "motion/react";
+import { BookOpen, Languages, Sparkles, Command, Github, Mail, Key, Cpu, Cloud, CheckCircle2 } from "lucide-react";
 import { RdatLogo } from "./RdatLogo";
 import { useSettingsStore } from "../stores/settings-store";
 import { isWebGPUAvailable } from "../lib/local-llm-engine";

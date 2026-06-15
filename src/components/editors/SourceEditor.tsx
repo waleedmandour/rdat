@@ -3,7 +3,7 @@ import { useLanguage } from "../../context/LanguageContext";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import { useToast } from "../../context/ToastContext";
 import { cn } from "../../lib/utils";
-import { Upload, X, FileText, CheckCircle2 } from "lucide-react";
+import { Upload, X } from "lucide-react";
 
 interface SourceEditorProps {
   sentences: string[];
