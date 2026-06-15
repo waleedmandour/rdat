@@ -15,7 +15,6 @@ import {
   Sparkles, 
   HelpCircle, 
   CornerDownLeft, 
-  ChevronRight, 
   Volume2,
   Cpu
 } from "lucide-react";
@@ -33,9 +32,6 @@ interface TargetEditorProps {
 }
 
 // ─── Edit Distance Utility ────────────────────────────────────────
-// Levenshtein-based edit distance for deviation detection.
-// When the user's typed text diverges significantly from the last
-// ghost suggestion, we re-trigger a new suggestion fetch.
 function editDistance(a: string, b: string): number {
   const m = a.length, n = b.length;
   if (m === 0) return n;
@@ -53,12 +49,28 @@ function editDistance(a: string, b: string): number {
   return dp[m][n];
 }
 
-/** Returns a normalised deviation ratio (0–1) between typed text and suggestion. */
 function deviationRatio(typed: string, suggestion: string): number {
   if (!suggestion) return 0;
   const maxLen = Math.max(typed.length, suggestion.length);
   if (maxLen === 0) return 0;
   return editDistance(typed, suggestion) / maxLen;
+}
+
+/**
+ * Helper: compute ghost-text remainder from a full translation candidate
+ * and the user's typed prefix.
+ */
+function computeGhostRemainder(typedText: string, candidate: string): string {
+  const trimmed = typedText.trim();
+  if (trimmed && candidate.startsWith(trimmed)) {
+    return candidate.substring(trimmed.length);
+  }
+  if (trimmed && candidate.includes(trimmed)) {
+    const idx = candidate.indexOf(trimmed);
+    return candidate.substring(idx + trimmed.length);
+  }
+  // No prefix overlap — show the full suggestion as ghost
+  return " " + candidate;
 }
 
 export function TargetEditor({
@@ -85,66 +97,51 @@ export function TargetEditor({
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestFetchId = useRef(0);
 
-  // ─── KEY FIX: Use a ref to track the "just-accepted" state ───
   const justAcceptedRef = useRef(false);
-
-  // ─── Prefetch on segment focus ───
   const hasPrefetchedRef = useRef(false);
-
-  // ─── Edit distance deviation detection ───
   const lastSuggestionTextRef = useRef<string>("");
   const DEVIATION_THRESHOLD = 0.6;
 
-  // Debounced suggestion fetcher — uses refs for store values to keep the callback identity stable.
   const engineModeRef = useRef(engineMode);
   const useCloudFallbackRef = useRef(useCloudFallback);
   useEffect(() => { engineModeRef.current = engineMode; }, [engineMode]);
   useEffect(() => { useCloudFallbackRef.current = useCloudFallback; }, [useCloudFallback]);
 
   const fetchSuggestions = useCallback(async (typedText: string) => {
-    // ── TIER 0: Prefetch Cache Hit (instant, 0ms) ──
-    // If we have a cached prefetch translation for this source text,
-    // use it to instantly produce ghost-text by comparing against the
-    // user's typed prefix. This avoids any LLM or API call.
+    // ════════════════════════════════════════════════════════════════
+    // Phase 3: Simplified 2-tier ghost-text pipeline
+    //
+    //   TIER 0: Prefetch Cache (instant, 0ms)
+    //   TIER 1: RAG-LLM (LTE corpus as RAG + WebGPU inference)
+    //           - LTE exact/partial matches are checked first (instant)
+    //           - If no exact match, RAG-augmented LLM generates suggestion
+    //           - LTE corpus feeds directly into the LLM as RAG context
+    //   TIER 2: Cloud Gemini (fallback when local tiers fail)
+    // ════════════════════════════════════════════════════════════════
+
+    // ── TIER 0: Prefetch Cache (instant, 0ms) ──
     const cachedTranslation = getPrefetch(sourceText);
-    if (cachedTranslation && !typedText.trim()) {
-      // Empty target — show the full cached translation as ghost
-      setGhostSuggestion(cachedTranslation);
-      setSuggestionCandidates([cachedTranslation]);
-      setCandidateIndex(0);
-      lastSuggestionTextRef.current = cachedTranslation;
-      return;
-    }
-    if (cachedTranslation && typedText.trim()) {
-      // User has typed something — compute the ghost remainder from cache
-      if (cachedTranslation.startsWith(typedText.trim())) {
-        const remainder = cachedTranslation.substring(typedText.trim().length);
-        if (remainder) {
-          setGhostSuggestion(remainder);
-          setSuggestionCandidates([cachedTranslation]);
-          setCandidateIndex(0);
-          lastSuggestionTextRef.current = cachedTranslation;
-          return;
-        }
-      } else if (cachedTranslation.includes(typedText.trim())) {
-        const idx = cachedTranslation.indexOf(typedText.trim());
-        const remainder = cachedTranslation.substring(idx + typedText.trim().length);
-        if (remainder) {
-          setGhostSuggestion(remainder);
-          setSuggestionCandidates([cachedTranslation]);
-          setCandidateIndex(0);
-          lastSuggestionTextRef.current = cachedTranslation;
-          return;
-        }
+    if (cachedTranslation) {
+      const remainder = computeGhostRemainder(typedText, cachedTranslation);
+      if (remainder.trim()) {
+        setGhostSuggestion(remainder);
+        setSuggestionCandidates([cachedTranslation]);
+        setCandidateIndex(0);
+        lastSuggestionTextRef.current = cachedTranslation;
+        return;
       }
-      // If typed text doesn't match cache prefix, fall through to other tiers
     }
 
-    // ── TIER 1: LTE Dictionary Match (instant, <5ms) ──
+    // ── TIER 1: RAG-LLM (LTE + Local LLM merged) ──
+    // LTE is now the RAG retrieval layer that feeds into the LLM.
+    // We still check LTE for instant exact matches first (they're free),
+    // then fall through to the RAG-augmented LLM for fuzzy/complex cases.
     const lte = getLTE();
-    if (lte.getStats().entries > 0) {
+    const hasCorpus = lte.getStats().entries > 0;
+
+    // Step 1a: LTE instant exact/partial match (<5ms, always check)
+    if (hasCorpus) {
       const localMatch = lte.getSuggestion(sourceText, typedText);
-      
       if (localMatch && localMatch.remainder) {
         setGhostSuggestion(localMatch.remainder);
         setSuggestionCandidates([localMatch.match]);
@@ -154,32 +151,24 @@ export function TargetEditor({
       }
     }
 
-    // ── TIER 2: Local LLM On-Device Inference (~200-2000ms via WebGPU) ──
-    // Uses selective RAG (generateRAGTranslation) to include only the top-5
-    // most relevant glossary entries as context, keeping the prompt concise.
+    // Step 1b: RAG-augmented Local LLM inference
+    // LTE corpus entries become RAG context for the LLM — this is the
+    // core of the Phase 3 pipeline simplification.
     if (isModelLoaded() && engineModeRef.current !== "cloud") {
       const fetchId = ++latestFetchId.current;
       try {
-        const lte = getLTE();
-        const llmCandidates = lte.getStats().entries > 0
+        const llmCandidates = hasCorpus
           ? await generateRAGTranslation(sourceText, typedText, 5)
           : await generateLocalTranslation(sourceText, typedText);
         if (fetchId !== latestFetchId.current) return;
 
         if (llmCandidates.length > 0) {
+          const best = llmCandidates[0];
+          const remainder = computeGhostRemainder(typedText, best);
+          setGhostSuggestion(remainder);
           setSuggestionCandidates(llmCandidates);
           setCandidateIndex(0);
-
-          const best = llmCandidates[0];
           lastSuggestionTextRef.current = best;
-          if (typedText.trim() && best.startsWith(typedText.trim())) {
-            setGhostSuggestion(best.substring(typedText.trim().length));
-          } else if (typedText.trim() && best.includes(typedText.trim())) {
-            const idx = best.indexOf(typedText.trim());
-            setGhostSuggestion(best.substring(idx + typedText.trim().length));
-          } else {
-            setGhostSuggestion(" " + best);
-          }
           return;
         }
       } catch (e) {
@@ -187,23 +176,19 @@ export function TargetEditor({
       }
     }
 
-    // ── TIER 3: Cloud Gemini Fallback ──
+    // ── TIER 2: Cloud Gemini Fallback ──
     if (useCloudFallbackRef.current && engineModeRef.current !== "local") {
       const fetchId = ++latestFetchId.current;
       try {
         const candidates = await generateBurst(sourceText, typedText);
         if (fetchId !== latestFetchId.current) return;
         if (candidates && candidates.length > 0) {
+          const best = candidates[0];
+          const remainder = computeGhostRemainder(typedText, best);
+          setGhostSuggestion(remainder);
           setSuggestionCandidates(candidates);
           setCandidateIndex(0);
-          
-          const best = candidates[0];
           lastSuggestionTextRef.current = best;
-          if (best.startsWith(typedText)) {
-            setGhostSuggestion(best.substring(typedText.length));
-          } else {
-            setGhostSuggestion(" " + best);
-          }
           return;
         }
       } catch (e) {
@@ -218,10 +203,6 @@ export function TargetEditor({
   }, [sourceText, generateBurst]);
 
   // ─── Prefetch on segment focus ───
-  // When a segment becomes active, immediately:
-  //   1. Check prefetch cache for instant ghost-text
-  //   2. Trigger background prefetch via LLM (if model loaded)
-  //   3. Subsequent keystrokes use normal 400ms debounce
   useEffect(() => {
     if (!isActive) {
       hasPrefetchedRef.current = false;
@@ -237,34 +218,23 @@ export function TargetEditor({
       return;
     }
 
-    // On first activation, prefetch immediately (0ms debounce)
     if (!hasPrefetchedRef.current) {
       hasPrefetchedRef.current = true;
       if (justAcceptedRef.current) {
         justAcceptedRef.current = false;
         return;
       }
-
-      // Phase 2: Trigger background prefetch for this segment.
-      // This populates the cache so subsequent fetchSuggestions() calls
-      // can return instantly from Tier 0 (prefetch cache).
-      prefetchTranslation(sourceText).catch(() => {
-        // Prefetch failure is non-critical — the normal tier system
-        // will handle it when fetchSuggestions() is called.
-      });
-
-      // Also immediately try to display ghost-text from existing data
+      prefetchTranslation(sourceText).catch(() => {});
       fetchSuggestions(translationText);
       return;
     }
 
-    // If we just accepted a suggestion, skip this cycle and reset the flag
     if (justAcceptedRef.current) {
       justAcceptedRef.current = false;
       return;
     }
 
-    // ─── Edit distance deviation detection ───
+    // Edit distance deviation detection
     if (lastSuggestionTextRef.current && translationText.trim()) {
       const deviation = deviationRatio(translationText.trim(), lastSuggestionTextRef.current);
       if (deviation > DEVIATION_THRESHOLD) {
@@ -288,63 +258,44 @@ export function TargetEditor({
     };
   }, [isActive, translationText, fetchSuggestions, sourceText]);
 
-  // Keybindings handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // 1. Tab accepts the full suggestion
     if (e.key === "Tab" && ghostSuggestion) {
       e.preventDefault();
       justAcceptedRef.current = true;
-      const acceptedText = translationText + ghostSuggestion;
-      onChange(acceptedText);
+      onChange(translationText + ghostSuggestion);
       setGhostSuggestion("");
       setSuggestionCandidates([]);
       return;
     }
 
-    // 2. Ctrl + Right Arrow accepts next word of prediction
     if (e.key === "ArrowRight" && e.ctrlKey && ghostSuggestion) {
       e.preventDefault();
       const trimmedSuggestion = ghostSuggestion.trimStart();
       const firstSpaceIdx = trimmedSuggestion.indexOf(" ");
       let nextPortion = "";
-
       if (firstSpaceIdx === -1) {
         nextPortion = ghostSuggestion;
       } else {
         const leadingSpacesCount = ghostSuggestion.length - trimmedSuggestion.length;
         nextPortion = ghostSuggestion.substring(0, leadingSpacesCount + firstSpaceIdx + 1);
       }
-
       justAcceptedRef.current = true;
-      const updatedText = translationText + nextPortion;
-      onChange(updatedText);
-
+      onChange(translationText + nextPortion);
       const remainingGhost = ghostSuggestion.substring(nextPortion.length);
-      if (remainingGhost.trim()) {
-        setGhostSuggestion(remainingGhost);
-      } else {
-        setGhostSuggestion("");
-        setSuggestionCandidates([]);
-      }
+      setGhostSuggestion(remainingGhost.trim() ? remainingGhost : "");
+      if (!remainingGhost.trim()) setSuggestionCandidates([]);
       return;
     }
 
-    // 3. Alt + ] cycles translation candidates
     if (e.key === "]" && e.altKey && suggestionCandidates.length > 1) {
       e.preventDefault();
       const nextIdx = (candidateIndex + 1) % suggestionCandidates.length;
       setCandidateIndex(nextIdx);
-
       const nextCandidate = suggestionCandidates[nextIdx];
-      if (nextCandidate.startsWith(translationText)) {
-        setGhostSuggestion(nextCandidate.substring(translationText.length));
-      } else {
-        setGhostSuggestion(" " + nextCandidate);
-      }
+      setGhostSuggestion(computeGhostRemainder(translationText, nextCandidate));
       return;
     }
 
-    // 4. Escape dismisses suggestion
     if (e.key === "Escape") {
       e.preventDefault();
       setGhostSuggestion("");
@@ -352,7 +303,6 @@ export function TargetEditor({
       return;
     }
 
-    // 5. Ctrl + Enter confirms the segment
     if (e.key === "Enter" && e.ctrlKey) {
       e.preventDefault();
       onConfirm();
@@ -360,7 +310,6 @@ export function TargetEditor({
     }
   }
 
-  // Text-To-Speech
   const handlePronunciation = () => {
     if (!translationText) return;
     const utterance = new SpeechSynthesisUtterance(translationText);
