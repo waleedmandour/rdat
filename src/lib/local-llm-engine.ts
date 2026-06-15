@@ -6,10 +6,11 @@
  *   2. On-device inference for translation suggestions
  *   3. Model lifecycle management (load / unload / status)
  *   4. RAG-augmented translation with selective glossary context
+ *   5. Translation prefetch cache for instant ghost-text display
  *
- * Architecture:
- *   LTE (dict/n-gram) → Local LLM (WebGPU inference) → Cloud Gemini (fallback)
- *                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+ * Architecture (Phase 2 — RAG-augmented pipeline):
+ *   LTE (dict/n-gram) → RAG-LLM (WebGPU + glossary context) → Cloud Gemini (fallback)
+ *                        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
  *                        This module provides the middle tier.
  */
 
@@ -56,6 +57,45 @@ export type LLMEngineState =
 let engineState: LLMEngineState = "idle";
 let engineError: string | null = null;
 
+// ─── Translation Prefetch Cache ──────────────────────────────────
+// When the user focuses a segment, we prefetch a full translation
+// and cache it. The ghost-text system then compares the user's typed
+// prefix against this cached translation to instantly produce a
+// suggestion remainder — no LLM call needed until the user deviates.
+const prefetchCache = new Map<string, { translation: string; timestamp: number }>();
+const PREFETCH_TTL_MS = 120_000; // Cache entries expire after 2 minutes
+
+/** Store a prefetched translation in the cache. */
+export function cachePrefetch(sourceText: string, translation: string): void {
+  prefetchCache.set(sourceText.trim().toLowerCase(), {
+    translation,
+    timestamp: Date.now(),
+  });
+  // Prune expired entries
+  const now = Date.now();
+  for (const [key, val] of prefetchCache) {
+    if (now - val.timestamp > PREFETCH_TTL_MS) {
+      prefetchCache.delete(key);
+    }
+  }
+}
+
+/** Retrieve a cached prefetch translation, or null if not found/expired. */
+export function getPrefetch(sourceText: string): string | null {
+  const entry = prefetchCache.get(sourceText.trim().toLowerCase());
+  if (!entry) return null;
+  if (Date.now() - entry.timestamp > PREFETCH_TTL_MS) {
+    prefetchCache.delete(sourceText.trim().toLowerCase());
+    return null;
+  }
+  return entry.translation;
+}
+
+/** Clear the entire prefetch cache. */
+export function clearPrefetchCache(): void {
+  prefetchCache.clear();
+}
+
 // ─── Callbacks ─────────────────────────────────────────────────────
 
 type StateChangeCallback = (
@@ -76,6 +116,47 @@ function notifySubscribers() {
 export function onEngineStateChange(cb: StateChangeCallback): () => void {
   subscribers.add(cb);
   return () => subscribers.delete(cb);
+}
+
+// ─── Structured System Prompt Builder ──────────────────────────────
+// Constructs a domain-specific system prompt for professional EN→AR
+// translation, enriched with selective RAG context from the LTE corpus.
+
+/**
+ * Build a structured system prompt for EN→AR CAT translation.
+ *
+ * The prompt follows a strict format that instructs the model to:
+ *   1. Use glossary terms preferentially where applicable
+ *   2. Maintain terminological consistency across the translation
+ *   3. Produce natural, fluent Arabic — not literal word-for-word
+ *   4. Output ONLY the Arabic text, no commentary
+ *
+ * @param ragEntries - Top-k relevant glossary/TM entries from LTE
+ * @returns Formatted system prompt string
+ */
+function buildSystemPrompt(ragEntries: Array<CorpusEntry & { score: number }>): string {
+  // Base instructions — professional EN→AR CAT translator persona
+  const baseInstructions = [
+    "You are a professional English-to-Arabic translator specializing in Computer-Assisted Translation (CAT) workflows.",
+    "Your task is to translate the given English text into natural, accurate, and fluent Arabic.",
+    "Follow these rules strictly:",
+    "1. Use the reference glossary terms preferentially wherever they apply.",
+    "2. Maintain terminological consistency — if a term appears multiple times, translate it the same way each time.",
+    "3. Produce Modern Standard Arabic (فصحى) suitable for professional/academic contexts.",
+    "4. Do NOT add explanations, notes, transliterations, or commentary.",
+    "5. Output ONLY the Arabic translation — nothing else.",
+  ].join("\n");
+
+  // RAG context section — only included when we have relevant entries
+  let ragContext = "";
+  if (ragEntries.length > 0) {
+    const formattedEntries = ragEntries
+      .map((e) => `  • "${e.en}" → "${e.ar}"`)
+      .join("\n");
+    ragContext = `\n\nReference glossary (use these terms preferentially where applicable):\n${formattedEntries}`;
+  }
+
+  return baseInstructions + ragContext;
 }
 
 // ─── Core Functions ────────────────────────────────────────────────
@@ -172,10 +253,10 @@ export async function unloadModel(): Promise<void> {
 }
 
 /**
- * Generate translation suggestions using the on-device LLM.
+ * Generate translation suggestions using the on-device LLM (no RAG context).
  *
- * This is the core inference function. It constructs a translation prompt
- * and calls the model's chat completion API.
+ * This is the basic inference function used as a fallback when the LTE
+ * corpus is empty and no RAG context is available.
  *
  * @param sourceText - The source text to translate (English)
  * @param targetPrefix - The already-typed Arabic prefix to condition on
@@ -195,8 +276,7 @@ export async function generateLocalTranslation(
   notifySubscribers();
 
   try {
-    // Construct a focused translation prompt
-    const systemPrompt = `You are a professional English-to-Arabic translator. Translate the given English text into natural, accurate Arabic. Only output the Arabic translation, nothing else. Do not add explanations, notes, or transliterations.`;
+    const systemPrompt = `You are a professional English-to-Arabic translator specializing in Computer-Assisted Translation (CAT) workflows. Translate the given English text into natural, accurate, and fluent Modern Standard Arabic. Only output the Arabic translation, nothing else. Do not add explanations, notes, or transliterations.`;
 
     const userPrompt = targetPrefix.trim()
       ? `Translate the following English text to Arabic. The translation must start with: "${targetPrefix.trim()}"\n\nEnglish: ${sourceText}\nArabic:`
@@ -209,7 +289,6 @@ export async function generateLocalTranslation(
       ],
       max_tokens: 256,
       temperature: 0.3,
-      // Only request 1 candidate for speed; we can increase to n: 2 if needed
     });
 
     const candidates: string[] = [];
@@ -228,6 +307,131 @@ export async function generateLocalTranslation(
     engineState = prevState === "generating" ? "ready" : prevState;
     notifySubscribers();
   }
+}
+
+/**
+ * Generate RAG-augmented translation suggestions using the on-device LLM.
+ *
+ * This is the primary inference function for the Phase 2 pipeline. It
+ * constructs a domain-specific system prompt enriched with selective
+ * glossary/TM context retrieved from the LTE. Only the top-k most
+ * relevant entries are included to avoid context bloat and keep the
+ * prompt within token limits of smaller models (1.5B–9B parameters).
+ *
+ * Features:
+ *   - Selective RAG: Retrieves only top-k (default 5) most relevant entries
+ *   - Structured system prompt with CAT-specific instructions
+ *   - Glossary-aware translation with terminological consistency enforcement
+ *   - Falls back to non-RAG translation if no relevant entries found
+ *   - Caches the result in the prefetch cache for instant ghost-text
+ *
+ * @param sourceText - The source text to translate (English)
+ * @param targetPrefix - The already-typed Arabic prefix to condition on
+ * @param topK - Maximum number of glossary entries to include as RAG context
+ * @returns Array of translation candidate strings
+ */
+export async function generateRAGTranslation(
+  sourceText: string,
+  targetPrefix: string,
+  topK = 5
+): Promise<string[]> {
+  if (!engine || !currentModelId) {
+    console.warn("[LocalLLM] No model loaded — cannot generate RAG translation.");
+    return [];
+  }
+
+  const prevState = engineState;
+  engineState = "generating";
+  notifySubscribers();
+
+  try {
+    // ── Selective RAG: Retrieve top-k relevant glossary entries ──
+    const lte = getLTE();
+    const ragEntries: Array<CorpusEntry & { score: number }> = lte.getStats().entries > 0
+      ? lte.search(sourceText, topK)
+      : [];
+
+    // Build the structured system prompt with RAG context
+    const systemPrompt = buildSystemPrompt(ragEntries);
+
+    const userPrompt = targetPrefix.trim()
+      ? `Translate the following English text to Arabic. The translation must start with: "${targetPrefix.trim()}"\n\nEnglish: ${sourceText}\nArabic:`
+      : `Translate the following English text to Arabic.\n\nEnglish: ${sourceText}\nArabic:`;
+
+    const reply = await engine.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: 256,
+      temperature: 0.3,
+    });
+
+    const candidates: string[] = [];
+    for (const choice of reply.choices) {
+      const content = choice.message?.content?.trim();
+      if (content) {
+        candidates.push(content);
+      }
+    }
+
+    // Cache the best candidate in the prefetch cache
+    if (candidates.length > 0) {
+      cachePrefetch(sourceText, candidates[0]);
+    }
+
+    return candidates;
+  } catch (err: any) {
+    console.error("[LocalLLM] RAG inference failed:", err);
+    return [];
+  } finally {
+    engineState = prevState === "generating" ? "ready" : prevState;
+    notifySubscribers();
+  }
+}
+
+/**
+ * Prefetch a translation for a source segment.
+ *
+ * Called when the user focuses a new segment (before they start typing).
+ * The result is cached and used for instant ghost-text display when the
+ * user begins typing. If a cached result already exists and is fresh,
+ * it is returned immediately without calling the LLM.
+ *
+ * @param sourceText - The source text to pre-translate
+ * @returns The cached or freshly generated translation, or null on failure
+ */
+export async function prefetchTranslation(sourceText: string): Promise<string | null> {
+  // Check prefetch cache first
+  const cached = getPrefetch(sourceText);
+  if (cached) {
+    console.log("[LocalLLM] Prefetch cache hit for segment.");
+    return cached;
+  }
+
+  // Also check LTE for an instant match
+  const lte = getLTE();
+  if (lte.getStats().entries > 0) {
+    const lteResult = lte.getSuggestion(sourceText, "");
+    if (lteResult && lteResult.match) {
+      cachePrefetch(sourceText, lteResult.match);
+      return lteResult.match;
+    }
+  }
+
+  // If a model is loaded, use RAG translation for the prefetch
+  if (engine && currentModelId && engineState === "ready") {
+    try {
+      const candidates = await generateRAGTranslation(sourceText, "", 5);
+      if (candidates.length > 0) {
+        return candidates[0];
+      }
+    } catch (err) {
+      console.warn("[LocalLLM] Prefetch inference failed:", err);
+    }
+  }
+
+  return null;
 }
 
 // ─── Query Functions ───────────────────────────────────────────────
@@ -283,89 +487,6 @@ export async function removeModelCache(rdatModelId: string): Promise<void> {
     console.log(`[LocalLLM] Cache cleared for "${rdatModelId}".`);
   } catch (err) {
     console.warn(`[LocalLLM] Failed to clear cache for "${rdatModelId}":`, err);
-  }
-}
-
-/**
- * Generate RAG-augmented translation suggestions using the on-device LLM.
- *
- * This is the next-generation inference function that constructs a translation
- * prompt enriched with selective glossary/TM context retrieved from the LTE.
- * Only the top-k most relevant entries are included to avoid context bloat
- * and keep the prompt within token limits of smaller models.
- *
- * RISK MITIGATION: Selective RAG
- *   - Retrieves only top-k (default 5) most relevant glossary entries
- *   - Entries are ranked by n-gram similarity to the source text
- *   - Keeps the prompt concise for small models (1.5B–9B)
- *   - Falls back to non-RAG translation if no relevant entries found
- *
- * @param sourceText - The source text to translate (English)
- * @param targetPrefix - The already-typed Arabic prefix to condition on
- * @param topK - Maximum number of glossary entries to include as RAG context
- * @returns Array of translation candidate strings
- */
-export async function generateRAGTranslation(
-  sourceText: string,
-  targetPrefix: string,
-  topK = 5
-): Promise<string[]> {
-  if (!engine || !currentModelId) {
-    console.warn("[LocalLLM] No model loaded — cannot generate RAG translation.");
-    return [];
-  }
-
-  const prevState = engineState;
-  engineState = "generating";
-  notifySubscribers();
-
-  try {
-    // ── Selective RAG: Retrieve top-k relevant glossary entries ──
-    const lte = getLTE();
-    const ragEntries: Array<CorpusEntry & { score: number }> = lte.getStats().entries > 0
-      ? lte.search(sourceText, topK)
-      : [];
-
-    // Build the glossary context section (only if we have relevant entries)
-    let glossaryContext = "";
-    if (ragEntries.length > 0) {
-      const entries = ragEntries
-        .map((e) => `  - "${e.en}" → "${e.ar}"`)
-        .join("\n");
-      glossaryContext = `\n\nReference glossary (use these terms preferentially where applicable):\n${entries}`;
-    }
-
-    // Construct a structured system prompt with RAG context
-    const systemPrompt = `You are a professional English-to-Arabic translator.${glossaryContext}\n\nTranslate the given English text into natural, accurate Arabic. Maintain terminological consistency with the reference glossary above. Only output the Arabic translation, nothing else. Do not add explanations, notes, or transliterations.`;
-
-    const userPrompt = targetPrefix.trim()
-      ? `Translate the following English text to Arabic. The translation must start with: "${targetPrefix.trim()}"\n\nEnglish: ${sourceText}\nArabic:`
-      : `Translate the following English text to Arabic.\n\nEnglish: ${sourceText}\nArabic:`;
-
-    const reply = await engine.chat.completions.create({
-      messages: [
-        { role: "system", content: systemPrompt },
-        { role: "user", content: userPrompt },
-      ],
-      max_tokens: 256,
-      temperature: 0.3,
-    });
-
-    const candidates: string[] = [];
-    for (const choice of reply.choices) {
-      const content = choice.message?.content?.trim();
-      if (content) {
-        candidates.push(content);
-      }
-    }
-
-    return candidates;
-  } catch (err: any) {
-    console.error("[LocalLLM] RAG inference failed:", err);
-    return [];
-  } finally {
-    engineState = prevState === "generating" ? "ready" : prevState;
-    notifySubscribers();
   }
 }
 
