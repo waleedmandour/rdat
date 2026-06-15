@@ -21,7 +21,7 @@
   ],
   "functions": {
     "api/translate/*.ts": {
-      "runtime": "@vercel/node@20",
+      "runtime": "nodejs20.x",
       "maxDuration": 10
     }
   }
