@@ -3,13 +3,18 @@ import { RAGState } from "../types";
 import { getLTE } from "../lib/local-translation-engine";
 
 export function useRAG() {
-  const [ragState, setRagState] = useState<RAGState>({
-    isWorkerReady: true,
-    isCorpusLoaded: true,
-    isLoading: false,
-    error: null,
-    corpusSize: 5,
-    modelsLoaded: true,
+  const [ragState, setRagState] = useState<RAGState>(() => {
+    // Read actual LTE stats on initialisation instead of hardcoding values
+    const lte = getLTE();
+    const stats = lte.getStats();
+    return {
+      isWorkerReady: true,
+      isCorpusLoaded: stats.entries > 0,
+      isLoading: false,
+      error: null,
+      corpusSize: stats.entries,
+      modelsLoaded: true,
+    };
   });
 
   const lteSearch = useCallback((query: string, limit = 5) => {

@@ -4,6 +4,7 @@ import { getLTE } from "../../lib/local-translation-engine";
 import {
   isModelLoaded,
   generateLocalTranslation,
+  generateRAGTranslation,
   getLoadedModelId,
 } from "../../lib/local-llm-engine";
 import { useGemini } from "../../hooks/useGemini";
@@ -27,6 +28,35 @@ interface TargetEditorProps {
   isActive: boolean;
   onHover: (hovered: boolean) => void;
   isHovered: boolean;
+}
+
+// ─── Edit Distance Utility ────────────────────────────────────────
+// Levenshtein-based edit distance for deviation detection.
+// When the user's typed text diverges significantly from the last
+// ghost suggestion, we re-trigger a new suggestion fetch.
+function editDistance(a: string, b: string): number {
+  const m = a.length, n = b.length;
+  if (m === 0) return n;
+  if (n === 0) return m;
+  const dp: number[][] = Array.from({ length: m + 1 }, () => Array(n + 1).fill(0));
+  for (let i = 0; i <= m; i++) dp[i][0] = i;
+  for (let j = 0; j <= n; j++) dp[0][j] = j;
+  for (let i = 1; i <= m; i++) {
+    for (let j = 1; j <= n; j++) {
+      dp[i][j] = a[i - 1] === b[j - 1]
+        ? dp[i - 1][j - 1]
+        : 1 + Math.min(dp[i - 1][j], dp[i][j - 1], dp[i - 1][j - 1]);
+    }
+  }
+  return dp[m][n];
+}
+
+/** Returns a normalised deviation ratio (0–1) between typed text and suggestion. */
+function deviationRatio(typed: string, suggestion: string): number {
+  if (!suggestion) return 0;
+  const maxLen = Math.max(typed.length, suggestion.length);
+  if (maxLen === 0) return 0;
+  return editDistance(typed, suggestion) / maxLen;
 }
 
 export function TargetEditor({
@@ -58,6 +88,20 @@ export function TargetEditor({
   // flag so the next translationText change doesn't trigger a new suggestion fetch.
   const justAcceptedRef = useRef(false);
 
+  // ─── RISK MITIGATION: Prefetch on segment focus ───
+  // Track whether this segment has been prefetched on initial focus.
+  // When a segment becomes active for the first time, we immediately
+  // fire a suggestion fetch (0ms debounce) so the user sees ghost-text
+  // right away instead of waiting 400ms.
+  const hasPrefetchedRef = useRef(false);
+
+  // ─── RISK MITIGATION: Edit distance deviation detection ───
+  // Track the last suggestion text so we can measure how far the user
+  // has deviated. If deviation exceeds the threshold, we re-trigger
+  // a new suggestion fetch even within the debounce window.
+  const lastSuggestionTextRef = useRef<string>("");
+  const DEVIATION_THRESHOLD = 0.6; // Re-trigger if >60% of characters differ
+
   // Debounced suggestion fetcher — avoids firing on every keystroke.
   // Uses refs for store values to keep the callback identity stable.
   const engineModeRef = useRef(engineMode);
@@ -69,6 +113,8 @@ export function TargetEditor({
     // ── TIER 1: LTE Dictionary Match (instant, <5ms) ──
     // The Local Translation Engine uses exact/partial/n-gram matching against
     // the user's glossary corpus. It's the fastest tier and always runs first.
+    // RISK MITIGATION: LTE remains as a lightweight fallback even when
+    // higher tiers fail — it costs nothing and often produces useful matches.
     const lte = getLTE();
     if (lte.getStats().entries > 0) {
       const localMatch = lte.getSuggestion(sourceText, typedText);
@@ -77,6 +123,7 @@ export function TargetEditor({
         setGhostSuggestion(localMatch.remainder);
         setSuggestionCandidates([localMatch.match]);
         setCandidateIndex(0);
+        lastSuggestionTextRef.current = localMatch.match;
         return;
       }
     }
@@ -85,10 +132,16 @@ export function TargetEditor({
     // If a local model is loaded and the engine mode is not "cloud",
     // we ask the on-device LLM for a translation suggestion. This runs
     // entirely in the browser using WebGPU — no data leaves the device.
+    // RISK MITIGATION: Uses selective RAG (generateRAGTranslation) to
+    // include only the top-5 most relevant glossary entries as context,
+    // keeping the prompt within token limits of smaller models.
     if (isModelLoaded() && engineModeRef.current !== "cloud") {
       const fetchId = ++latestFetchId.current;
       try {
-        const llmCandidates = await generateLocalTranslation(sourceText, typedText);
+        const lte = getLTE();
+        const llmCandidates = lte.getStats().entries > 0
+          ? await generateRAGTranslation(sourceText, typedText, 5)
+          : await generateLocalTranslation(sourceText, typedText);
         // Discard stale results if a newer fetch was triggered
         if (fetchId !== latestFetchId.current) return;
 
@@ -97,6 +150,7 @@ export function TargetEditor({
           setCandidateIndex(0);
 
           const best = llmCandidates[0];
+          lastSuggestionTextRef.current = best;
           // Compute ghost remainder by removing the typed prefix
           if (typedText.trim() && best.startsWith(typedText.trim())) {
             setGhostSuggestion(best.substring(typedText.trim().length));
@@ -112,14 +166,15 @@ export function TargetEditor({
         }
       } catch (e) {
         console.warn("[TargetEditor] Local LLM inference failed:", e);
-        // Fall through to cloud fallback
+        // Fall through to cloud fallback — LTE already checked above as
+        // lightweight fallback, so this is the next tier.
       }
     }
 
     // ── TIER 3: Cloud Gemini Fallback ──
     // If LTE and Local LLM didn't produce results, and cloud is enabled,
     // we call the Gemini API for a cloud-based translation suggestion.
-    if (useCloudFallbackRef.current && engineModeRef.current !== "local" && typedText.trim().length > 2) {
+    if (useCloudFallbackRef.current && engineModeRef.current !== "local") {
       const fetchId = ++latestFetchId.current;
       try {
         const candidates = await generateBurst(sourceText, typedText);
@@ -131,6 +186,7 @@ export function TargetEditor({
           
           // Deduct typed prefix to get the ghost remainder
           const best = candidates[0];
+          lastSuggestionTextRef.current = best;
           if (best.startsWith(typedText)) {
             setGhostSuggestion(best.substring(typedText.length));
           } else {
@@ -146,27 +202,61 @@ export function TargetEditor({
     // No suggestion found from any tier — clear
     setGhostSuggestion("");
     setSuggestionCandidates([]);
+    lastSuggestionTextRef.current = "";
   }, [sourceText, generateBurst]);
 
-  // Debounced effect: only trigger suggestion fetch after user stops typing for 400ms.
-  // IMPORTANT: Skips fetch if we just accepted a suggestion (justAcceptedRef).
+  // ─── RISK MITIGATION: Prefetch on segment focus ───
+  // When a segment becomes active, immediately fetch a suggestion with
+  // zero debounce. Subsequent keystrokes use the normal 400ms debounce.
   useEffect(() => {
     if (!isActive) {
+      hasPrefetchedRef.current = false;
       setGhostSuggestion("");
       setSuggestionCandidates([]);
+      setCandidateIndex(0);
+      justAcceptedRef.current = false;
+      lastSuggestionTextRef.current = "";
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+        debounceRef.current = null;
+      }
       return;
     }
 
-    if (!translationText || !translationText.trim()) {
-      setGhostSuggestion("");
-      setSuggestionCandidates([]);
+    // On first activation, prefetch immediately (0ms debounce)
+    if (!hasPrefetchedRef.current) {
+      hasPrefetchedRef.current = true;
+      // Skip if we just accepted a suggestion
+      if (justAcceptedRef.current) {
+        justAcceptedRef.current = false;
+        return;
+      }
+      fetchSuggestions(translationText);
       return;
     }
+
+    // Fetch suggestions even when the target is empty — the user should
+    // see a ghost-text suggestion as soon as they focus a blank segment.
+    // Previously this block returned early and prevented any suggestion
+    // from appearing on empty text, which was the primary reason ghost-
+    // text never showed up for new/untranslated segments.
 
     // If we just accepted a suggestion, skip this cycle and reset the flag
     if (justAcceptedRef.current) {
       justAcceptedRef.current = false;
       return;
+    }
+
+    // ─── RISK MITIGATION: Edit distance deviation detection ───
+    // If the user's typed text has deviated significantly from the last
+    // suggestion, re-trigger immediately instead of waiting for debounce.
+    if (lastSuggestionTextRef.current && translationText.trim()) {
+      const deviation = deviationRatio(translationText.trim(), lastSuggestionTextRef.current);
+      if (deviation > DEVIATION_THRESHOLD) {
+        // User has diverged — fetch fresh suggestions immediately
+        fetchSuggestions(translationText);
+        return;
+      }
     }
 
     // Clear any pending debounce timer
@@ -184,20 +274,6 @@ export function TargetEditor({
       }
     };
   }, [isActive, translationText, fetchSuggestions]);
-
-  // When segment becomes inactive, clear suggestions
-  useEffect(() => {
-    if (!isActive) {
-      setGhostSuggestion("");
-      setSuggestionCandidates([]);
-      setCandidateIndex(0);
-      justAcceptedRef.current = false;
-      if (debounceRef.current) {
-        clearTimeout(debounceRef.current);
-        debounceRef.current = null;
-      }
-    }
-  }, [isActive]);
 
   // Keybindings handler
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {

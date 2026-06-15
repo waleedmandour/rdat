@@ -514,6 +514,35 @@ export function AiModelsView() {
           </div>
         </div>
 
+        {/* ── WebGPU Unavailable Warning Banner ── */}
+        {!evaluatingSpecs && !hasWebGPU && (
+          <div className="p-4 rounded-xl border border-amber-500/30 bg-amber-500/5 flex items-start gap-3">
+            <AlertCircle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+            <div className="space-y-1">
+              <div className="text-sm font-bold text-amber-500">
+                {isRTL
+                  ? "WebGPU غير متاح على هذا المتصفح"
+                  : "WebGPU is not available in this browser"}
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                {isRTL
+                  ? "لا يمكن تشغيل النماذج اللغوية المحلية (Tier 2) لأن المتصفح لا يدعم WebGPU. يرجى استخدام متصفح حديث مثل Chrome 113+ أو Edge 113+ مع تفعيل WebGPU. يمكنك الاستمرار في استخدام Tier 1 (قاموس LTE المحلي) و Tier 3 (Gemini السحابي) مع محرك الهجين."
+                  : "Local LLM models (Tier 2) cannot run because your browser lacks WebGPU support. Please use a modern browser like Chrome 113+ or Edge 113+ with WebGPU enabled. You can still use Tier 1 (LTE dictionary) and Tier 3 (Cloud Gemini) with the Hybrid engine."}
+              </p>
+              <div className="flex gap-2 mt-2">
+                <a
+                  href="https://caniuse.com/webgpu"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-[10px] font-bold text-primary hover:underline"
+                >
+                  {isRTL ? "تحقق من توافق المتصفح →" : "Check browser compatibility →"}
+                </a>
+              </div>
+            </div>
+          </div>
+        )}
+
         {/* Engine mode select cards */}
         <div>
           <h2 className="text-[10px] font-bold text-slate-500 uppercase tracking-widest mb-3">

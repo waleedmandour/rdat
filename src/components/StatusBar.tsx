@@ -114,7 +114,13 @@ export function StatusBar({
         <div className="flex items-center gap-1">
           <Cpu className="w-3.5 h-3.5 text-muted-foreground" />
           <span>
-            {webgpuInfo.state === "ready" ? t("status.webgpu.ready") : t("status.webgpu.unavailable")}
+            {webgpuInfo.state === "ready"
+              ? t("status.webgpu.ready")
+              : webgpuInfo.state === "initializing"
+                ? (locale === "en" ? `Loading ${webgpuInfo.progress || 0}%` : `جاري التحميل ${webgpuInfo.progress || 0}%`)
+                : webgpuInfo.state === "error"
+                  ? (locale === "en" ? `WebGPU: ${webgpuInfo.error || "Error"}` : `WebGPU: ${webgpuInfo.error || "خطأ"}`)
+                  : t("status.webgpu.unavailable")}
           </span>
         </div>
       </div>

@@ -5,6 +5,7 @@
  *   1. Real model downloading and caching (via browser Cache API)
  *   2. On-device inference for translation suggestions
  *   3. Model lifecycle management (load / unload / status)
+ *   4. RAG-augmented translation with selective glossary context
  *
  * Architecture:
  *   LTE (dict/n-gram) → Local LLM (WebGPU inference) → Cloud Gemini (fallback)
@@ -20,6 +21,7 @@ import {
   hasModelInCache,
   deleteModelInCache,
 } from "@mlc-ai/web-llm";
+import { getLTE, type CorpusEntry } from "./local-translation-engine";
 
 // ─── Model ID Mapping ─────────────────────────────────────────────
 // Maps the RDAT catalog IDs to the actual MLC WebLLM model registry IDs.
@@ -281,6 +283,89 @@ export async function removeModelCache(rdatModelId: string): Promise<void> {
     console.log(`[LocalLLM] Cache cleared for "${rdatModelId}".`);
   } catch (err) {
     console.warn(`[LocalLLM] Failed to clear cache for "${rdatModelId}":`, err);
+  }
+}
+
+/**
+ * Generate RAG-augmented translation suggestions using the on-device LLM.
+ *
+ * This is the next-generation inference function that constructs a translation
+ * prompt enriched with selective glossary/TM context retrieved from the LTE.
+ * Only the top-k most relevant entries are included to avoid context bloat
+ * and keep the prompt within token limits of smaller models.
+ *
+ * RISK MITIGATION: Selective RAG
+ *   - Retrieves only top-k (default 5) most relevant glossary entries
+ *   - Entries are ranked by n-gram similarity to the source text
+ *   - Keeps the prompt concise for small models (1.5B–9B)
+ *   - Falls back to non-RAG translation if no relevant entries found
+ *
+ * @param sourceText - The source text to translate (English)
+ * @param targetPrefix - The already-typed Arabic prefix to condition on
+ * @param topK - Maximum number of glossary entries to include as RAG context
+ * @returns Array of translation candidate strings
+ */
+export async function generateRAGTranslation(
+  sourceText: string,
+  targetPrefix: string,
+  topK = 5
+): Promise<string[]> {
+  if (!engine || !currentModelId) {
+    console.warn("[LocalLLM] No model loaded — cannot generate RAG translation.");
+    return [];
+  }
+
+  const prevState = engineState;
+  engineState = "generating";
+  notifySubscribers();
+
+  try {
+    // ── Selective RAG: Retrieve top-k relevant glossary entries ──
+    const lte = getLTE();
+    const ragEntries: Array<CorpusEntry & { score: number }> = lte.getStats().entries > 0
+      ? lte.search(sourceText, topK)
+      : [];
+
+    // Build the glossary context section (only if we have relevant entries)
+    let glossaryContext = "";
+    if (ragEntries.length > 0) {
+      const entries = ragEntries
+        .map((e) => `  - "${e.en}" → "${e.ar}"`)
+        .join("\n");
+      glossaryContext = `\n\nReference glossary (use these terms preferentially where applicable):\n${entries}`;
+    }
+
+    // Construct a structured system prompt with RAG context
+    const systemPrompt = `You are a professional English-to-Arabic translator.${glossaryContext}\n\nTranslate the given English text into natural, accurate Arabic. Maintain terminological consistency with the reference glossary above. Only output the Arabic translation, nothing else. Do not add explanations, notes, or transliterations.`;
+
+    const userPrompt = targetPrefix.trim()
+      ? `Translate the following English text to Arabic. The translation must start with: "${targetPrefix.trim()}"\n\nEnglish: ${sourceText}\nArabic:`
+      : `Translate the following English text to Arabic.\n\nEnglish: ${sourceText}\nArabic:`;
+
+    const reply = await engine.chat.completions.create({
+      messages: [
+        { role: "system", content: systemPrompt },
+        { role: "user", content: userPrompt },
+      ],
+      max_tokens: 256,
+      temperature: 0.3,
+    });
+
+    const candidates: string[] = [];
+    for (const choice of reply.choices) {
+      const content = choice.message?.content?.trim();
+      if (content) {
+        candidates.push(content);
+      }
+    }
+
+    return candidates;
+  } catch (err: any) {
+    console.error("[LocalLLM] RAG inference failed:", err);
+    return [];
+  } finally {
+    engineState = prevState === "generating" ? "ready" : prevState;
+    notifySubscribers();
   }
 }
 

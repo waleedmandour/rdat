@@ -18,5 +18,11 @@
         { "key": "Service-Worker-Allowed", "value": "/" }
       ]
     }
-  ]
+  ],
+  "functions": {
+    "api/translate/*.ts": {
+      "runtime": "@vercel/node@20",
+      "maxDuration": 10
+    }
+  }
 }
