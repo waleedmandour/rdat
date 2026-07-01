@@ -10,12 +10,16 @@ import {
 } from "../../lib/local-llm-engine";
 import { useGemini } from "../../hooks/useGemini";
 import { useSettingsStore } from "../../stores/settings-store";
+import { useUIStore } from "../../stores/ui-store";
+import { useToast } from "../../context/ToastContext";
 import { 
   Sparkles, 
   HelpCircle, 
   CornerDownLeft, 
   Volume2,
-  Cpu
+  Cpu,
+  AlertTriangle,
+  Zap
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -87,10 +91,27 @@ export function TargetEditor({
 
   const { generateBurst, loading } = useGemini();
   const { engineMode, useCloudFallback, loadedModel } = useSettingsStore();
+  const { showToast } = useToast();
+  const requestNav = useUIStore((s) => s.requestNav);
 
   const [ghostSuggestion, setGhostSuggestion] = useState<string>("");
   const [suggestionCandidates, setSuggestionCandidates] = useState<string[]>([]);
   const [candidateIndex, setCandidateIndex] = useState(0);
+
+  // ─── Tier Tracking State ───────────────────────────────────────
+  // tierSource: which tier produced the current ghost suggestion
+  //   - "lte"       : Tier 0 (Local Translation Engine — instant n-gram match)
+  //   - "local-llm" : Tier 1 (WebGPU on-device LLM — PRIMARY ENGINE)
+  //   - "gemini"    : Tier 2 (Cloud Gemini — SECONDARY fallback)
+  //   - null        : No suggestion currently active
+  //
+  // tierError: when a tier failed, why. Used to render the inline
+  // amber hint with action buttons (Load Model / Set API Key).
+  // Note: tierError is NOT cleared when a different tier succeeds —
+  // we want the user to keep seeing that the primary engine is down
+  // even if Gemini is currently carrying the load.
+  const [tierSource, setTierSource] = useState<"lte" | "local-llm" | "gemini" | null>(null);
+  const [tierError, setTierError] = useState<{ tier: "local-llm" | "gemini"; message: string } | null>(null);
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -101,10 +122,34 @@ export function TargetEditor({
   const lastSuggestionTextRef = useRef<string>("");
   const DEVIATION_THRESHOLD = 0.6;
 
+  // Per-session toast dedup — prevents spamming the same error toast
+  // on every keystroke / segment switch. Keys are error-class strings
+  // (e.g. "tier1-no-model", "tier2-gemini-failed"). Cleared for a key
+  // when that tier subsequently succeeds, so the user gets notified
+  // again if it breaks a second time.
+  const notifiedRef = useRef<Set<string>>(new Set());
+
+  const notifyOnce = useCallback((
+    key: string,
+    message: string,
+    type: "warning" | "error" | "info",
+    clearOnSuccessKeys: string[] = []
+  ) => {
+    if (notifiedRef.current.has(key)) return;
+    notifiedRef.current.add(key);
+    // Clear any stale success keys so we can re-notify if it breaks again
+    clearOnSuccessKeys.forEach((k) => notifiedRef.current.delete(k));
+    showToast(message, type);
+  }, [showToast]);
+
   const engineModeRef = useRef(engineMode);
   const useCloudFallbackRef = useRef(useCloudFallback);
+  const loadedModelRef = useRef(loadedModel);
+  const isRTLRef = useRef(isRTL);
   useEffect(() => { engineModeRef.current = engineMode; }, [engineMode]);
   useEffect(() => { useCloudFallbackRef.current = useCloudFallback; }, [useCloudFallback]);
+  useEffect(() => { loadedModelRef.current = loadedModel; }, [loadedModel]);
+  useEffect(() => { isRTLRef.current = isRTL; }, [isRTL]);
 
   const fetchSuggestions = useCallback(async (typedText: string) => {
     // ════════════════════════════════════════════════════════════════
@@ -118,7 +163,18 @@ export function TargetEditor({
     //   TIER 2: Cloud Gemini (fallback when local tiers fail)
     // ════════════════════════════════════════════════════════════════
 
-    // ── TIER 0: Prefetch Cache (instant, 0ms) ──
+    // ════════════════════════════════════════════════════════════════
+    // Tier priority (per project spec):
+    //   Tier 0  LTE           — instant corpus lookup (always free)
+    //   Tier 1  Local LLM     — PRIMARY ENGINE (WebGPU on-device)
+    //   Tier 2  Cloud Gemini  — SECONDARY fallback (only when Tier 1 down)
+    //
+    // Tier 1 failures are surfaced prominently (warning toast + amber
+    // inline hint) because it is the core engine. Tier 2 failures are
+    // surfaced quietly (info toast + gray hint) because it is optional.
+    // ════════════════════════════════════════════════════════════════
+
+    // ── TIER 0: Prefetch Cache + LTE (instant, 0ms) ──
     const cachedTranslation = getPrefetch(sourceText);
     if (cachedTranslation) {
       const remainder = computeGhostRemainder(typedText, cachedTranslation);
@@ -126,56 +182,94 @@ export function TargetEditor({
         setGhostSuggestion(remainder);
         setSuggestionCandidates([cachedTranslation]);
         setCandidateIndex(0);
+        setTierSource("lte");
+        setTierError(null);
         lastSuggestionTextRef.current = cachedTranslation;
         return;
       }
     }
 
-    // ── TIER 1: RAG-LLM (LTE + Local LLM merged) ──
-    // LTE is now the RAG retrieval layer that feeds into the LLM.
-    // We still check LTE for instant exact matches first (they're free),
-    // then fall through to the RAG-augmented LLM for fuzzy/complex cases.
     const lte = getLTE();
     const hasCorpus = lte.getStats().entries > 0;
 
-    // Step 1a: LTE instant exact/partial match (<5ms, always check)
+    // Step 0a: LTE instant exact/partial match (<5ms, always check)
     if (hasCorpus) {
       const localMatch = lte.getSuggestion(sourceText, typedText);
       if (localMatch && localMatch.remainder) {
         setGhostSuggestion(localMatch.remainder);
         setSuggestionCandidates([localMatch.match]);
         setCandidateIndex(0);
+        setTierSource("lte");
+        setTierError(null);
         lastSuggestionTextRef.current = localMatch.match;
         return;
       }
     }
 
-    // Step 1b: RAG-augmented Local LLM inference
-    // LTE corpus entries become RAG context for the LLM — this is the
-    // core of the Phase 3 pipeline simplification.
-    if (isModelLoaded() && engineModeRef.current !== "cloud") {
-      const fetchId = ++latestFetchId.current;
-      try {
-        const llmCandidates = hasCorpus
-          ? await generateRAGTranslation(sourceText, typedText, 5)
-          : await generateLocalTranslation(sourceText, typedText);
-        if (fetchId !== latestFetchId.current) return;
+    // ── TIER 1: Local LLM (PRIMARY ENGINE) ──
+    // LTE corpus entries become RAG context for the LLM.
+    //
+    // If Tier 1 is unavailable, we surface the precise reason so the
+    // user knows exactly why ghost-text is missing — instead of the
+    // old behavior where Tier 1 was silently skipped.
+    const isCloudOnlyMode = engineModeRef.current === "cloud";
+    if (!isCloudOnlyMode) {
+      if (!isModelLoaded()) {
+        // Determine the precise reason Tier 1 is inactive
+        const reason = !loadedModelRef.current
+          ? (isRTLRef.current
+              ? "لم يتم تحميل أي نموذج محلي بعد. افتح لوحة «النماذج» لتحميل نموذج Qwen 1.5B أو Gemma 2B."
+              : "No local model loaded yet. Open the Models panel to load Qwen 1.5B or Gemma 2B.")
+          : (isRTLRef.current
+              ? "WebGPU غير متاح في هذا المتصفح. استخدم Chrome 113+ أو Edge 113+ لتشغيل النماذج المحلية."
+              : "WebGPU not available in this browser. Use Chrome 113+ or Edge 113+ to run local models.");
+        setTierError({ tier: "local-llm", message: reason });
+        notifyOnce(
+          "tier1-no-model",
+          isRTLRef.current ? "المحرك الأساسي معطّل: " + reason : "Primary engine inactive: " + reason,
+          "warning"
+        );
+      } else {
+        const fetchId = ++latestFetchId.current;
+        try {
+          const llmCandidates = hasCorpus
+            ? await generateRAGTranslation(sourceText, typedText, 5)
+            : await generateLocalTranslation(sourceText, typedText);
+          if (fetchId !== latestFetchId.current) return;
 
-        if (llmCandidates.length > 0) {
-          const best = llmCandidates[0];
-          const remainder = computeGhostRemainder(typedText, best);
-          setGhostSuggestion(remainder);
-          setSuggestionCandidates(llmCandidates);
-          setCandidateIndex(0);
-          lastSuggestionTextRef.current = best;
-          return;
+          if (llmCandidates.length > 0) {
+            const best = llmCandidates[0];
+            const remainder = computeGhostRemainder(typedText, best);
+            setGhostSuggestion(remainder);
+            setSuggestionCandidates(llmCandidates);
+            setCandidateIndex(0);
+            setTierSource("local-llm");
+            // Clear local-llm errors and reset dedup so we can re-notify
+            // if it breaks again later.
+            setTierError((prev) => prev?.tier === "local-llm" ? null : prev);
+            notifiedRef.current.delete("tier1-no-model");
+            notifiedRef.current.delete("tier1-inference-failed");
+            lastSuggestionTextRef.current = best;
+            return;
+          }
+        } catch (e: any) {
+          console.warn("[TargetEditor] Local LLM inference failed:", e);
+          const msg = e?.message || String(e);
+          setTierError({ tier: "local-llm", message: msg });
+          notifyOnce(
+            "tier1-inference-failed",
+            isRTLRef.current ? "فشل الاستدلال المحلي: " + msg : "Local LLM inference failed: " + msg,
+            "warning"
+          );
         }
-      } catch (e) {
-        console.warn("[TargetEditor] Local LLM inference failed:", e);
       }
     }
 
-    // ── TIER 2: Cloud Gemini Fallback ──
+    // ── TIER 2: Cloud Gemini (SECONDARY FALLBACK) ──
+    // Gemini is the SECONDARY tier. Failures here are quieter (info
+    // toast) because the primary local-LLM tier should normally carry
+    // the load. We still surface them so the user knows Gemini isn't
+    // silently swallowing requests.
     if (useCloudFallbackRef.current && engineModeRef.current !== "local") {
       const fetchId = ++latestFetchId.current;
       try {
@@ -187,17 +281,31 @@ export function TargetEditor({
           setGhostSuggestion(remainder);
           setSuggestionCandidates(candidates);
           setCandidateIndex(0);
+          setTierSource("gemini");
+          // Only clear Gemini-tier errors — keep local-llm errors visible
+          // so the user remembers the primary engine is still down.
+          setTierError((prev) => prev?.tier === "gemini" ? null : prev);
+          notifiedRef.current.delete("tier2-gemini-failed");
           lastSuggestionTextRef.current = best;
           return;
         }
-      } catch (e) {
+      } catch (e: any) {
         console.warn("[TargetEditor] Gemini burst failed:", e);
+        const msg = e?.message || String(e);
+        setTierError((prev) => prev ?? { tier: "gemini", message: msg });
+        notifyOnce(
+          "tier2-gemini-failed",
+          isRTLRef.current ? "Gemini الاحتياطي غير متاح: " + msg : "Gemini fallback unavailable: " + msg,
+          "info"
+        );
       }
     }
 
-    // No suggestion found from any tier — clear
+    // No suggestion found from any tier — clear ghost text but KEEP
+    // tierError visible so the inline hint can guide the user.
     setGhostSuggestion("");
     setSuggestionCandidates([]);
+    setTierSource(null);
     lastSuggestionTextRef.current = "";
   }, [sourceText, generateBurst]);
 
@@ -208,6 +316,10 @@ export function TargetEditor({
       setGhostSuggestion("");
       setSuggestionCandidates([]);
       setCandidateIndex(0);
+      setTierSource(null);
+      // Don't clear tierError here — we want it to persist across segment
+      // switches so the inline hint stays visible. It gets cleared on
+      // successful fetch or on explicit user action.
       justAcceptedRef.current = false;
       lastSuggestionTextRef.current = "";
       if (debounceRef.current) {
@@ -375,12 +487,70 @@ export function TargetEditor({
             dir={isRTL ? "rtl" : "ltr"}
           >
             <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
-            <span>[Tab] {isRTL ? "إتمام تلقائي" : "Auto-complete"} ({loadedModel && isModelLoaded() ? (
-              <span className="inline-flex items-center gap-0.5"><Cpu className="w-3 h-3" />{loadedModel.toUpperCase()}</span>
-            ) : "LTE"}): {ghostSuggestion}</span>
+            <span>[Tab] {isRTL ? "إتمام تلقائي" : "Auto-complete"} (
+              <span className={cn(
+                "inline-flex items-center gap-0.5 px-1 rounded font-bold",
+                tierSource === "lte" && "bg-emerald-500/15 text-emerald-500",
+                tierSource === "local-llm" && "bg-blue-500/15 text-blue-500",
+                tierSource === "gemini" && "bg-amber-500/15 text-amber-500"
+              )}>
+                {tierSource === "lte" && (isRTL ? "ذاكرة" : "LTE")}
+                {tierSource === "local-llm" && loadedModel && (
+                  <><Cpu className="w-3 h-3" />{loadedModel.toUpperCase()}</>
+                )}
+                {tierSource === "gemini" && (isRTL ? "سحابي" : "GEMINI")}
+              </span>
+            ): {ghostSuggestion}</span>
           </div>
         )}
       </div>
+
+      {isActive && !ghostSuggestion && tierError && (
+        <div
+          className={cn(
+            "mt-1 p-3 rounded-lg border text-[11px] flex items-start gap-2",
+            tierError.tier === "local-llm"
+              ? "border-amber-500/30 bg-amber-500/5 text-amber-600 dark:text-amber-400"
+              : "border-slate-500/25 bg-slate-500/5 text-muted-foreground"
+          )}
+          dir={isRTL ? "rtl" : "ltr"}
+        >
+          <AlertTriangle className={cn(
+            "w-3.5 h-3.5 shrink-0 mt-0.5",
+            tierError.tier === "local-llm" ? "text-amber-500" : "text-muted-foreground"
+          )} />
+          <div className="flex-1">
+            <div className="font-bold mb-1">
+              {tierError.tier === "local-llm"
+                ? (isRTL ? "المحرك الأساسي معطّل" : "Primary engine inactive")
+                : (isRTL ? "الترجمة السحابية غير متاحة" : "Cloud fallback unavailable")}
+            </div>
+            <div className="text-[10px] opacity-80 mb-2 leading-relaxed">
+              {tierError.message}
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              {tierError.tier === "local-llm" && (
+                <button
+                  onClick={() => requestNav("models")}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-amber-500/15 hover:bg-amber-500/25 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-[10px] transition-all cursor-pointer"
+                >
+                  <Cpu className="w-3 h-3" />
+                  {isRTL ? "تحميل نموذج محلي" : "Load Local Model"}
+                </button>
+              )}
+              {tierError.tier === "gemini" && (
+                <button
+                  onClick={() => requestNav("api-keys")}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md bg-slate-500/15 hover:bg-slate-500/25 border border-slate-500/30 text-foreground font-bold text-[10px] transition-all cursor-pointer"
+                >
+                  <Zap className="w-3 h-3" />
+                  {isRTL ? "إعداد مفتاح Gemini" : "Set Gemini API Key"}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {isActive && (
         <div className="flex flex-wrap items-center justify-between pt-3 border-t dark:border-white/5 border-border/40 text-[10px] text-muted-foreground leading-loose" dir={isRTL ? "rtl" : "ltr"}>

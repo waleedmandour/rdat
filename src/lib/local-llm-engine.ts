@@ -52,6 +52,17 @@ export type LLMEngineState =
 let engineState: LLMEngineState = "idle";
 let engineError: string | null = null;
 
+// ─── Inference Error Tracking ────────────────────────────────────
+// Separate from `engineError` (which tracks *load* failures).
+// `lastLLMError` tracks the most recent *inference* failure so
+// downstream consumers (TargetEditor, StatusBar) can surface it.
+let lastLLMError: string | null = null;
+
+/** Get the most recent inference error, or null if the last call succeeded. */
+export function getLastLLMError(): string | null {
+  return lastLLMError;
+}
+
 // ─── Translation Prefetch Cache ──────────────────────────────────
 // When the user focuses a segment, we prefetch a full translation
 // and cache it. The ghost-text system then compares the user's typed
@@ -297,6 +308,7 @@ export async function generateLocalTranslation(
     return candidates;
   } catch (err: any) {
     console.error("[LocalLLM] Inference failed:", err);
+    lastLLMError = err?.message || String(err);
     return [];
   } finally {
     engineState = prevState === "generating" ? "ready" : prevState;
@@ -378,6 +390,7 @@ export async function generateRAGTranslation(
     return candidates;
   } catch (err: any) {
     console.error("[LocalLLM] RAG inference failed:", err);
+    lastLLMError = err?.message || String(err);
     return [];
   } finally {
     engineState = prevState === "generating" ? "ready" : prevState;

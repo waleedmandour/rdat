@@ -208,24 +208,20 @@ function SetupChecklist() {
     isWebGPUAvailable().then(setWebgpuAvailable);
   }, []);
 
+  // Steps are ordered by engine priority: Local LLM is the PRIMARY engine,
+  // Gemini is the SECONDARY fallback. The user should set up the local
+  // model first; Gemini is optional and only used when the local model
+  // is unavailable or for fallback on complex passages.
   const steps = [
     {
-      icon: Key,
-      label: isRTL ? "مفتاح Gemini API" : "Gemini API Key",
-      desc: isRTL
-        ? "أدخل مفتاحك في لوحة مفاتيح API لتفعيل الترجمة السحابية"
-        : "Enter your key in the API Keys panel to enable cloud translation",
-      done: !!geminiApiKey,
-      href: "#api-keys",
-    },
-    {
       icon: Cpu,
-      label: isRTL ? "تحميل نموذج محلي" : "Load Local Model",
+      label: isRTL ? "تحميل نموذج محلي (المحرك الأساسي)" : "Load Local Model (Primary Engine)",
       desc: isRTL
-        ? "حمّل نموذج Qwen 1.5B أو Gemma 2B للترجمة بدون اتصال"
-        : "Download Qwen 1.5B or Gemma 2B for offline translation",
+        ? "المحرك الأساسي للمشروع. حمّل Qwen 1.5B أو Gemma 2B للترجمة الفورية بدون اتصال."
+        : "The project's primary engine. Download Qwen 1.5B or Gemma 2B for instant offline translation.",
       done: !!loadedModel,
       href: "#models",
+      primary: true,
     },
     {
       icon: Cloud,
@@ -235,6 +231,17 @@ function SetupChecklist() {
         : "Combines local speed + cloud accuracy for best results",
       done: !!geminiApiKey || !!loadedModel,
       href: "#models",
+      primary: false,
+    },
+    {
+      icon: Key,
+      label: isRTL ? "مفتاح Gemini API (اختياري)" : "Gemini API Key (Optional Fallback)",
+      desc: isRTL
+        ? "خيار ثانوي للترجمة السحابية عند تعذر استخدام النموذج المحلي"
+        : "Secondary option for cloud translation when the local model is unavailable",
+      done: !!geminiApiKey,
+      href: "#api-keys",
+      primary: false,
     },
   ];
 

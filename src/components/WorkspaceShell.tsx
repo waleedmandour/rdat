@@ -14,6 +14,7 @@ import { InstallPWAButton } from "./InstallPWAButton";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { useSettingsStore } from "../stores/settings-store";
+import { useUIStore } from "../stores/ui-store";
 import { useRAG } from "../hooks/useRAG";
 import { useLocalAgent } from "../hooks/useLocalAgent";
 import { useWebLLM } from "../hooks/useWebLLM";
@@ -45,6 +46,18 @@ export function WorkspaceShell() {
   const [activeNav, setActiveNav] = useState<NavItem | "welcome">("welcome");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+
+  // ─── Cross-component nav requests ──────────────────────────────
+  // Allows deeply-nested components (e.g. the inline "Load Local Model"
+  // hint inside TargetEditor) to request a panel switch.
+  const pendingNav = useUIStore((s) => s.pendingNav);
+  const clearPendingNav = useUIStore((s) => s.clearPendingNav);
+  useEffect(() => {
+    if (pendingNav) {
+      setActiveNav(pendingNav);
+      clearPendingNav();
+    }
+  }, [pendingNav, clearPendingNav]);
 
   // Grab custom stores & hooks
   const { engineMode, geminiApiKey, useGtr } = useSettingsStore();
