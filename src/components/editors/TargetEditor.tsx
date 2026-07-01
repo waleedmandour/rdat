@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { getLTE } from "../../lib/local-translation-engine";
+import type { CorpusEntry } from "../../lib/local-translation-engine";
 import {
   isModelLoaded,
   generateLocalTranslation,
@@ -8,14 +9,16 @@ import {
   prefetchTranslation,
   getPrefetch,
 } from "../../lib/local-llm-engine";
+import { getActiveAdapterSync, isTauriEnvironment } from "../../lib/adapters";
+import type { LLMAdapter } from "../../lib/llm-adapter";
 import { useGemini } from "../../hooks/useGemini";
 import { useSettingsStore } from "../../stores/settings-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useToast } from "../../context/ToastContext";
-import { 
-  Sparkles, 
-  HelpCircle, 
-  CornerDownLeft, 
+import {
+  Sparkles,
+  HelpCircle,
+  CornerDownLeft,
   Volume2,
   Cpu,
   AlertTriangle,
@@ -209,27 +212,85 @@ export function TargetEditor({
     // ── TIER 1: Local LLM (PRIMARY ENGINE) ──
     // LTE corpus entries become RAG context for the LLM.
     //
+    // Adapter pattern: in Tauri desktop mode with Ollama installed,
+    // we use the OllamaAdapter (native CUDA/Metal, faster, supports
+    // larger models). Otherwise we fall back to the legacy WebLLM
+    // path (in-browser WebGPU). Both paths produce the same shape
+    // of output (string[] candidates) so the rest of the pipeline
+    // is identical.
+    //
     // If Tier 1 is unavailable, we surface the precise reason so the
     // user knows exactly why ghost-text is missing — instead of the
     // old behavior where Tier 1 was silently skipped.
     const isCloudOnlyMode = engineModeRef.current === "cloud";
     if (!isCloudOnlyMode) {
-      if (!isModelLoaded()) {
-        // Determine the precise reason Tier 1 is inactive
-        const reason = !loadedModelRef.current
-          ? (isRTLRef.current
-              ? "لم يتم تحميل أي نموذج محلي بعد. افتح لوحة «النماذج» لتحميل نموذج Qwen 1.5B أو Gemma 2B."
-              : "No local model loaded yet. Open the Models panel to load Qwen 1.5B or Gemma 2B.")
-          : (isRTLRef.current
-              ? "WebGPU غير متاح في هذا المتصفح. استخدم Chrome 113+ أو Edge 113+ لتشغيل النماذج المحلية."
-              : "WebGPU not available in this browser. Use Chrome 113+ or Edge 113+ to run local models.");
-        setTierError({ tier: "local-llm", message: reason });
-        notifyOnce(
-          "tier1-no-model",
-          isRTLRef.current ? "المحرك الأساسي معطّل: " + reason : "Primary engine inactive: " + reason,
-          "warning"
-        );
-      } else {
+      const adapter = getActiveAdapterSync();
+
+      // ── Branch A: Active adapter (Ollama in Tauri, or WebLLM via adapter) ──
+      if (adapter) {
+        if (!adapter.isModelLoaded()) {
+          const reason = !loadedModelRef.current
+            ? (isTauriEnvironment()
+                ? (isRTLRef.current
+                    ? "لم يتم تحميل أي نموذج محلي بعد. افتح لوحة «النماذج» لتثبيت نموذج من Ollama."
+                    : "No local model loaded yet. Open the Models panel to install a model from Ollama.")
+                : (isRTLRef.current
+                    ? "لم يتم تحميل أي نموذج محلي بعد. افتح لوحة «النماذج» لتحميل نموذج Qwen 1.5B أو Gemma 2B."
+                    : "No local model loaded yet. Open the Models panel to load Qwen 1.5B or Gemma 2B."))
+            : (isRTLRef.current
+                ? "WebGPU غير متاح في هذا المتصفح. استخدم Chrome 113+ أو Edge 113+ لتشغيل النماذج المحلية."
+                : "WebGPU not available in this browser. Use Chrome 113+ or Edge 113+ to run local models.");
+          setTierError({ tier: "local-llm", message: reason });
+          notifyOnce(
+            "tier1-no-model",
+            isRTLRef.current ? "المحرك الأساسي معطّل: " + reason : "Primary engine inactive: " + reason,
+            "warning"
+          );
+        } else {
+          const fetchId = ++latestFetchId.current;
+          try {
+            // Retrieve RAG entries from LTE for the adapter
+            const ragEntries: CorpusEntry[] | undefined = hasCorpus
+              ? getLTE().search(sourceText, 5)
+              : undefined;
+
+            const llmCandidates = await adapter.translate({
+              sourceText,
+              targetPrefix: typedText,
+              ragEntries,
+            });
+            if (fetchId !== latestFetchId.current) return;
+
+            if (llmCandidates.length > 0) {
+              const best = llmCandidates[0];
+              const remainder = computeGhostRemainder(typedText, best);
+              setGhostSuggestion(remainder);
+              setSuggestionCandidates(llmCandidates);
+              setCandidateIndex(0);
+              setTierSource("local-llm");
+              setTierError((prev) => prev?.tier === "local-llm" ? null : prev);
+              notifiedRef.current.delete("tier1-no-model");
+              notifiedRef.current.delete("tier1-inference-failed");
+              lastSuggestionTextRef.current = best;
+              return;
+            }
+          } catch (e: any) {
+            console.warn("[TargetEditor] Adapter inference failed:", e);
+            const msg = e?.message || String(e);
+            setTierError({ tier: "local-llm", message: msg });
+            notifyOnce(
+              "tier1-inference-failed",
+              isRTLRef.current ? "فشل الاستدلال المحلي: " + msg : "Local LLM inference failed: " + msg,
+              "warning"
+            );
+          }
+        }
+      }
+      // ── Branch B: No adapter (legacy PWA path, direct WebLLM calls) ──
+      // This branch is taken when the adapter factory hasn't resolved
+      // yet (early page load) or returned null. We keep the original
+      // direct-call path so the existing PWA behavior is unchanged.
+      else if (isModelLoaded()) {
         const fetchId = ++latestFetchId.current;
         try {
           const llmCandidates = hasCorpus
@@ -244,8 +305,6 @@ export function TargetEditor({
             setSuggestionCandidates(llmCandidates);
             setCandidateIndex(0);
             setTierSource("local-llm");
-            // Clear local-llm errors and reset dedup so we can re-notify
-            // if it breaks again later.
             setTierError((prev) => prev?.tier === "local-llm" ? null : prev);
             notifiedRef.current.delete("tier1-no-model");
             notifiedRef.current.delete("tier1-inference-failed");
@@ -262,6 +321,21 @@ export function TargetEditor({
             "warning"
           );
         }
+      } else {
+        // No adapter AND no WebLLM model loaded — surface the reason
+        const reason = !loadedModelRef.current
+          ? (isRTLRef.current
+              ? "لم يتم تحميل أي نموذج محلي بعد. افتح لوحة «النماذج» لتحميل نموذج."
+              : "No local model loaded yet. Open the Models panel to load a model.")
+          : (isRTLRef.current
+              ? "WebGPU غير متاح في هذا المتصفح. في وضع سطح المكتب، ثبّت Ollama للحصول على الأداء الأمثل."
+              : "WebGPU not available in this browser. In desktop mode, install Ollama for best performance.");
+        setTierError({ tier: "local-llm", message: reason });
+        notifyOnce(
+          "tier1-no-model",
+          isRTLRef.current ? "المحرك الأساسي معطّل: " + reason : "Primary engine inactive: " + reason,
+          "warning"
+        );
       }
     }
 
