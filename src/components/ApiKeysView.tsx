@@ -44,7 +44,40 @@ export function ApiKeysView() {
         }),
       });
 
-      const data = await response.json();
+      // Defensive parsing — Vercel may return non-JSON error pages on
+      // function crashes, cold starts, or Node version issues.
+      let rawText: string;
+      try {
+        rawText = await response.text();
+      } catch (e: any) {
+        throw new Error(`Failed to read response: ${e?.message || e}`);
+      }
+
+      let data: any;
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        const preview = rawText.slice(0, 200).replace(/\s+/g, " ").trim();
+        const contentType = response.headers.get("content-type") || "";
+        let diagnose: string;
+        if (preview.toLowerCase().startsWith("a server error")) {
+          diagnose = isRTL
+            ? `خطأ في خادم Vercel (الحالة ${response.status}). غالباً مشكلة في تشغيل الدالة البرمجية. حاول مرة أخرى خلال 30 ثانية.`
+            : `Vercel serverless function crashed (status ${response.status}). Likely a cold-start or runtime issue. Retry in 30s.`;
+        } else if (contentType.includes("text/html") || preview.startsWith("<!DOCTYPE") || preview.startsWith("<html")) {
+          diagnose = isRTL
+            ? `استجابة HTML بدلاً من JSON (الحالة ${response.status}). مسار API قد لا يكون منشوراً بشكل صحيح.`
+            : `Received HTML instead of JSON (status ${response.status}). The API route may not be deployed correctly.`;
+        } else {
+          diagnose = isRTL
+            ? `استجابة غير صالحة (الحالة ${response.status})`
+            : `Invalid response (status ${response.status})`;
+        }
+        setTestStatus("fail");
+        setTestMessage(`${diagnose}\n\nPreview: "${preview}"`);
+        showToast(isRTL ? "فشل التحقق من المفتاح" : "Key verification failed", "error");
+        return;
+      }
 
       if (response.ok && data.translation) {
         setTestStatus("ok");

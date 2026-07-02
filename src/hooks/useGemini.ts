@@ -5,17 +5,88 @@ import { TutorAnalysis } from "../types";
 /**
  * Hook for Cloud Gemini API calls (Tier 2 of the ghost-text pipeline).
  *
- * Phase 3 enhancement: Added retry logic and better error recovery.
- * If a Gemini API call fails due to a network timeout or 5xx error,
- * the hook automatically retries up to 2 times with exponential backoff
- * (500ms, 1500ms). Non-retryable errors (4xx, missing API key) fail
- * immediately without retrying.
+ * Architecture note (user-owned key model):
+ *   The Gemini API key is sent in the request body on every call. The
+ *   Vercel serverless function forwards it to the Gemini SDK. No API
+ *   key is stored server-side.
+ *
+ * Error handling note:
+ *   Vercel serverless functions can return non-JSON responses in
+ *   several failure modes:
+ *     - Cold-start crashes (function dies before our code runs)
+ *     - Function timeout (returns Vercel's HTML error page)
+ *     - Node version deprecation (returns "A server error occurred...")
+ *     - Function size limit exceeded (returns 413 HTML)
+ *   All JSON parsing in this hook is wrapped in safeJsonParse to
+ *   handle these gracefully and surface a useful error message
+ *   instead of the cryptic "Unexpected token 'A'..." parse error.
  */
 export function useGemini() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const geminiApiKey = useSettingsStore((state) => state.geminiApiKey);
   const MAX_RETRIES = 2;
+
+  /**
+   * Safely parse a Response as JSON, falling back to a useful error
+   * message if the body is not valid JSON (e.g. Vercel's HTML error pages).
+   *
+   * Returns a flat object shape (always has `ok` + `error` fields) so
+   * TypeScript narrowing works cleanly in caller code without
+   * discriminated-union gymnastics.
+   */
+  async function safeJsonParse<T = any>(response: Response): Promise<{ ok: boolean; data: T | null; error: string | null }> {
+    // First, get the raw text so we can inspect it
+    let rawText: string;
+    try {
+      rawText = await response.text();
+    } catch (e: any) {
+      return { ok: false, data: null, error: `Failed to read response body: ${e?.message || e}` };
+    }
+
+    // Try JSON parse
+    try {
+      const data = JSON.parse(rawText) as T;
+      return { ok: true, data, error: null };
+    } catch {
+      // Not JSON — diagnose what we got
+      const contentType = response.headers.get("content-type") || "";
+      const preview = rawText.slice(0, 200).replace(/\s+/g, " ").trim();
+
+      // Vercel's standard server error page starts with "A server error..."
+      if (preview.toLowerCase().startsWith("a server error")) {
+        return {
+          ok: false,
+          data: null,
+          error: `Vercel serverless function crashed (likely cold-start or runtime error). ` +
+                 `Status: ${response.status}. ` +
+                 `This often happens when the function fails to import dependencies on first load. ` +
+                 `Try again in 30 seconds — Vercel may be re-deploying. ` +
+                 `If the issue persists, check the Vercel function logs. ` +
+                 `Preview: "${preview}"`,
+        };
+      }
+
+      // HTML response (Vercel's error page or the SPA fallback)
+      if (contentType.includes("text/html") || preview.startsWith("<!DOCTYPE") || preview.startsWith("<html")) {
+        return {
+          ok: false,
+          data: null,
+          error: `Expected JSON but received HTML (status ${response.status}). ` +
+                 `This usually means the API route was not deployed correctly, or a rewrite rule is intercepting /api/* requests. ` +
+                 `Preview: "${preview}"`,
+        };
+      }
+
+      // Some other non-JSON text
+      return {
+        ok: false,
+        data: null,
+        error: `Expected JSON response but got ${contentType || "unknown content-type"} (status ${response.status}). ` +
+               `Preview: "${preview}"`,
+      };
+    }
+  }
 
   const fetchWithRetry = useCallback(
     async (url: string, body: object): Promise<Response> => {
@@ -68,12 +139,18 @@ export function useGemini() {
         });
 
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Gemini API error (${response.status})`);
+          const result = await safeJsonParse<{ error?: string }>(response);
+          const msg = result.ok && result.data?.error
+            ? result.data.error
+            : !result.ok && result.error
+              ? result.error
+              : `Gemini API error (${response.status})`;
+          throw new Error(msg);
         }
 
-        const data = await response.json();
-        return data.suggestions || [];
+        const result = await safeJsonParse<{ suggestions?: string[] }>(response);
+        if (!result.ok || !result.data) throw new Error(result.error || "Invalid response");
+        return result.data.suggestions || [];
       } catch (err: any) {
         console.error("[useGemini] Burst generation failed:", err);
         setError(err.message);
@@ -99,12 +176,18 @@ export function useGemini() {
         });
 
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Gemini API error (${response.status})`);
+          const result = await safeJsonParse<{ error?: string }>(response);
+          const msg = result.ok && result.data?.error
+            ? result.data.error
+            : !result.ok && result.error
+              ? result.error
+              : `Gemini API error (${response.status})`;
+          throw new Error(msg);
         }
 
-        const data = await response.json();
-        return data.translation || "";
+        const result = await safeJsonParse<{ translation?: string }>(response);
+        if (!result.ok || !result.data) throw new Error(result.error || "Invalid response");
+        return result.data.translation || "";
       } catch (err: any) {
         console.error("[useGemini] Full translation failed:", err);
         setError(err.message);
@@ -131,12 +214,18 @@ export function useGemini() {
         });
 
         if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Gemini API error (${response.status})`);
+          const result = await safeJsonParse<{ error?: string }>(response);
+          const msg = result.ok && result.data?.error
+            ? result.data.error
+            : !result.ok && result.error
+              ? result.error
+              : `Gemini API error (${response.status})`;
+          throw new Error(msg);
         }
 
-        const data = await response.json();
-        return data as TutorAnalysis;
+        const result = await safeJsonParse<TutorAnalysis>(response);
+        if (!result.ok || !result.data) throw new Error(result.error || "Invalid response");
+        return result.data;
       } catch (err: any) {
         console.error("[useGemini] Tutor call failed:", err);
         setError(err.message);
