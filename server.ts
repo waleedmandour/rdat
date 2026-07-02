@@ -3,15 +3,32 @@ import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
 
+// Load .env for local dev convenience ONLY. In production (Vercel),
+// the user-provided key from the request body is always used.
 dotenv.config();
 
-// Lazy initialize Google GenAI SDK to prevent container startup crashes
-let aiInstance: GoogleGenAI | null = null;
+/**
+ * Architecture (user-owned key model):
+ *   The Gemini API key is ALWAYS provided by the user via the in-app
+ *   API Keys panel. It is sent in the request body on every call.
+ *
+ *   For local development, you may optionally place a key in a .env
+ *   file — it will be used as a fallback ONLY when no user-provided
+ *   key is in the request. This is purely a dev-time convenience and
+ *   is NOT used in production deployments (Vercel does not read .env
+ *   files from the repo).
+ */
+const DEV_FALLBACK_KEY = process.env.GEMINI_API_KEY;
 
 function getAI(userProvidedKey?: string): GoogleGenAI {
-  const apiKey = userProvidedKey || process.env.GEMINI_API_KEY;
+  // In production: require user-provided key.
+  // In dev: fall back to .env key if no user key (convenience only).
+  const apiKey = userProvidedKey?.trim() || DEV_FALLBACK_KEY;
   if (!apiKey) {
-    throw new Error("GEMINI_API_KEY is not configured. Please supply a valid key under the AI Studio Settings panel or API Keys view.");
+    throw new Error(
+      "No Gemini API key provided. Please open the API Keys panel in the app and enter your key. " +
+      "Get one for free at https://aistudio.google.com/apikey"
+    );
   }
   return new GoogleGenAI({ apiKey });
 }

@@ -231,10 +231,18 @@ rdat/
    ```
 
 3. **Configure Gemini API key (optional, for cloud features):**
+
+   The app uses a **user-owned key** model — each user enters their own
+   Gemini API key in the app's **API Keys** panel at runtime. The key is
+   stored in the browser's localStorage and sent with each request.
+
+   For **local development convenience only**, you may optionally place
+   a key in a `.env` file (this is used as a fallback when no user key
+   is provided, and is NOT used in production):
    ```bash
    echo "GEMINI_API_KEY=your-key-here" > .env
    ```
-   The API key can also be entered directly in the app's **API Keys** settings panel at runtime.
+   Get a free key from [Google AI Studio](https://aistudio.google.com/apikey).
 
 4. **Start the development server:**
    ```bash
@@ -256,7 +264,7 @@ The repository includes a `vercel.json` configuration. Simply connect the GitHub
 
 - **Framework:** Vite (auto-detected)
 - **API routes:** Files under `api/**/*.ts` are deployed as serverless functions with Node.js 20.x runtime
-- **Environment variables:** Set `GEMINI_API_KEY` in the Vercel project settings (Settings → Environment Variables)
+- **Environment variables:** **None required.** The app uses a user-owned-key model — each user enters their own Gemini API key in the app's API Keys panel. No server-side environment variables need to be configured.
 - **SPA routing:** All non-API routes are rewritten to `index.html` for client-side routing
 
 ---
