@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "Default capability set for RDAT Copilot's main window. Grants access to the Ollama-related commands and standard Tauri plugins (shell, dialog, fs, process, updater).",
+  "description": "Default capability set for RDAT Copilot's main window. Grants access to the Ollama-related commands and standard Tauri plugins (shell, dialog, fs, process). The updater plugin is disabled in v0.2.0 — re-enable in v0.3.0 after generating a signing keypair.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -11,7 +11,6 @@
     "dialog:allow-save",
     "fs:allow-read-text-file",
     "fs:allow-write-text-file",
-    "process:default",
-    "updater:default"
+    "process:default"
   ]
 }
