@@ -277,11 +277,26 @@ export function AiModelsView() {
 
   if (adapterLoading) {
     return (
-      <div className="h-full flex items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-        <span className="ml-2 text-sm text-muted-foreground">
-          {isRTL ? "جاري التحقق من المحرك..." : "Detecting engine..."}
-        </span>
+      <div className="h-full flex flex-col items-center justify-center gap-3" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="flex items-center gap-2">
+          <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          <span className="text-sm text-muted-foreground">
+            {isRTL ? "جاري التحقق من المحرك..." : "Detecting engine..."}
+          </span>
+        </div>
+        {/* Skip button — if detection takes too long, user can force-continue
+            to see the no-adapter warning instead of waiting forever. */}
+        <button
+          onClick={() => {
+            console.warn("[AiModelsView] User clicked Skip — forcing no-adapter state.");
+            setAdapter(null);
+            setAdapterLoading(false);
+            setDaemonHealthy(false);
+          }}
+          className="mt-2 text-[10px] text-muted-foreground/60 hover:text-foreground underline cursor-pointer"
+        >
+          {isRTL ? "تخطٍّ" : "Skip"}
+        </button>
       </div>
     );
   }

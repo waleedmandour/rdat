@@ -30,7 +30,7 @@ export const translations = {
       segments: "Segments",
       words: "Words",
       ready: "Ready",
-      footer: "RDAT Copilot v1.0 | EN→AR",
+      footer: "RDAT Copilot v0.2.0 | EN→AR",
     },
     workspace: {
       title: {
@@ -112,7 +112,7 @@ export const translations = {
       segments: "المقاطع",
       words: "الكلمات",
       ready: "جاهز",
-      footer: "مساعد RDAT 1.0 | إنكليزي ↔ عربي",
+      footer: "مساعد RDAT 0.2.0 | إنكليزي ↔ عربي",
     },
     workspace: {
       title: {
