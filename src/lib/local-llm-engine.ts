@@ -27,6 +27,12 @@ import { getLTE, type CorpusEntry } from "./local-translation-engine";
 // ─── Model ID Mapping ─────────────────────────────────────────────
 // Maps the RDAT catalog IDs to the actual MLC WebLLM model registry IDs.
 // We prefer q4f16_1 quantization for the best speed/quality tradeoff.
+//
+// NOTE: WebLLM catalog lags behind Ollama. Gemma 4 / Qwen 3 / Llama 4
+// may not yet be on MLC's registry. The OllamaAdapter is the primary
+// path for modern models; WebLLMAdapter is the browser fallback and
+// uses whatever MLC has available. See RECOMMENDED_OLLAMA_MODELS in
+// ollama-adapter.ts for the modern lineup.
 export const MODEL_MAP: Record<string, string> = {
   "qwen-1.5b": "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
   "gemma-2b": "gemma-2-2b-it-q4f16_1-MLC",

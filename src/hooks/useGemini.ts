@@ -1,58 +1,57 @@
 import { useState, useCallback } from "react";
 import { useSettingsStore } from "../stores/settings-store";
 import { TutorAnalysis } from "../types";
+import {
+  geminiBurst,
+  geminiFull,
+  geminiTutor,
+} from "../lib/gemini-direct";
 
 /**
  * Hook for Cloud Gemini API calls (Tier 2 of the ghost-text pipeline).
  *
- * Phase 3 enhancement: Added retry logic and better error recovery.
- * If a Gemini API call fails due to a network timeout or 5xx error,
- * the hook automatically retries up to 2 times with exponential backoff
- * (500ms, 1500ms). Non-retryable errors (4xx, missing API key) fail
- * immediately without retrying.
+ * Architecture (dual-path):
+ *   - In Tauri (desktop app): calls go through the Rust-side proxy
+ *     (gemini_translate command) which uses reqwest to call the Gemini
+ *     REST API. Avoids CORS and works with post-June-19-2026 key
+ *     restrictions.
+ *   - In PWA (browser): calls go through the Vercel serverless
+ *     functions at /api/translate/* which use the @google/genai SDK.
+ *
+ * The dispatch happens in src/lib/gemini-direct.ts. This hook just
+ * calls those functions and manages loading/error state.
+ *
+ * Retry logic: Gemini calls are retried up to 2 times with exponential
+ * backoff (500ms, 1500ms) on 5xx errors and network failures.
  */
 export function useGemini() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const geminiApiKey = useSettingsStore((state) => state.geminiApiKey);
-  const MAX_RETRIES = 2;
 
-  const fetchWithRetry = useCallback(
-    async (url: string, body: object): Promise<Response> => {
-      let lastError: Error | null = null;
+  /**
+   * Retry wrapper — calls `fn` up to MAX_RETRIES+1 times.
+   * Retries on any error (network, 5xx, parse). Non-retryable errors
+   * (4xx, missing key) are thrown immediately by the underlying function.
+   */
+  const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => {
+    const MAX_RETRIES = 2;
+    let lastError: Error | null = null;
 
-      for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
-        try {
-          const response = await fetch(url, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(body),
-          });
-
-          // Retryable: server errors (5xx) and network timeouts
-          if (response.status >= 500 && attempt < MAX_RETRIES) {
-            const backoff = Math.min(500 * Math.pow(3, attempt), 3000);
-            console.warn(`[useGemini] Server error ${response.status}, retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-            await new Promise(resolve => setTimeout(resolve, backoff));
-            continue;
-          }
-
-          return response;
-        } catch (err: any) {
-          lastError = err;
-          // Network errors are retryable
-          if (attempt < MAX_RETRIES) {
-            const backoff = Math.min(500 * Math.pow(3, attempt), 3000);
-            console.warn(`[useGemini] Network error, retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES})`);
-            await new Promise(resolve => setTimeout(resolve, backoff));
-          }
+    for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+      try {
+        return await fn();
+      } catch (err: any) {
+        lastError = err;
+        if (attempt < MAX_RETRIES) {
+          const backoff = Math.min(500 * Math.pow(3, attempt), 3000);
+          console.warn(`[useGemini] Retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES}) — ${err?.message || err}`);
+          await new Promise(resolve => setTimeout(resolve, backoff));
         }
       }
-
-      throw lastError || new Error("All retry attempts failed");
-    },
-    []
-  );
+    }
+    throw lastError || new Error("All retry attempts failed");
+  };
 
   const generateBurst = useCallback(
     async (sourceText: string, targetPrefix: string): Promise<string[]> => {
@@ -61,19 +60,12 @@ export function useGemini() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetchWithRetry("/api/translate/burst", {
+        const result = await withRetry(() => geminiBurst({
           sourceText,
           targetPrefix,
           geminiApiKey,
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Gemini API error (${response.status})`);
-        }
-
-        const data = await response.json();
-        return data.suggestions || [];
+        }));
+        return result.suggestions || [];
       } catch (err: any) {
         console.error("[useGemini] Burst generation failed:", err);
         setError(err.message);
@@ -82,7 +74,7 @@ export function useGemini() {
         setLoading(false);
       }
     },
-    [geminiApiKey, fetchWithRetry]
+    [geminiApiKey]
   );
 
   const generateFullTranslation = useCallback(
@@ -92,19 +84,12 @@ export function useGemini() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetchWithRetry("/api/translate/full", {
+        const result = await withRetry(() => geminiFull({
           sourceText,
           targetPrefix,
           geminiApiKey,
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Gemini API error (${response.status})`);
-        }
-
-        const data = await response.json();
-        return data.translation || "";
+        }));
+        return result.translation || "";
       } catch (err: any) {
         console.error("[useGemini] Full translation failed:", err);
         setError(err.message);
@@ -113,7 +98,7 @@ export function useGemini() {
         setLoading(false);
       }
     },
-    [geminiApiKey, fetchWithRetry]
+    [geminiApiKey]
   );
 
   const generateTutorExplanation = useCallback(
@@ -123,20 +108,12 @@ export function useGemini() {
       setLoading(true);
       setError(null);
       try {
-        const response = await fetchWithRetry("/api/translate/tutor-explain", {
+        return await withRetry(() => geminiTutor({
           sourceText,
           targetText,
-          geminiApiKey,
           locale,
-        });
-
-        if (!response.ok) {
-          const errData = await response.json().catch(() => ({}));
-          throw new Error(errData.error || `Gemini API error (${response.status})`);
-        }
-
-        const data = await response.json();
-        return data as TutorAnalysis;
+          geminiApiKey,
+        }));
       } catch (err: any) {
         console.error("[useGemini] Tutor call failed:", err);
         setError(err.message);
@@ -145,7 +122,7 @@ export function useGemini() {
         setLoading(false);
       }
     },
-    [geminiApiKey, fetchWithRetry]
+    [geminiApiKey]
   );
 
   return {

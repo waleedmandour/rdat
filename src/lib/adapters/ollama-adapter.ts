@@ -76,47 +76,55 @@ async function getInvoke(): Promise<(cmd: string, args?: Record<string, unknown>
 }
 
 // ─── Default Ollama Model Catalog ─────────────────────────────────
+// Modern lineup (July 2026): Gemma 4, Qwen 3, Llama 4.
+// Gemma 4 E2B is the recommended starter model — smallest, fastest,
+// fits the project's 1-2B parameter target.
 // Even though Ollama can run any model the user has pulled, we ship a
 // recommended catalog so the AiModelsView can offer one-click install.
-// These map to Ollama model tags — the user can pull more if desired.
 
 const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
   {
-    id: "qwen2.5:1.5b",
-    name: "Qwen 2.5 1.5B Instruct",
-    parameters: "1.5B",
-    size: "~1.0 GB",
-    family: "Qwen",
-  },
-  {
-    id: "gemma2:2b",
-    name: "Gemma 2 2B IT",
-    parameters: "2B",
-    size: "~1.6 GB",
+    id: "gemma4:e2b",
+    name: "Gemma 4 E2B (Recommended Starter)",
+    parameters: "2B (Effective)",
+    size: "~1.5 GB",
     family: "Gemma",
   },
   {
-    id: "qwen2.5:7b",
-    name: "Qwen 2.5 7B Instruct",
-    parameters: "7B",
-    size: "~4.7 GB",
-    family: "Qwen",
-  },
-  {
-    id: "gemma2:9b",
-    name: "Gemma 2 9B IT",
-    parameters: "9B",
-    size: "~5.5 GB",
+    id: "gemma4:e4b",
+    name: "Gemma 4 E4B (Higher Quality)",
+    parameters: "4B (Effective)",
+    size: "~3.0 GB",
     family: "Gemma",
   },
   {
-    id: "llama3.1:8b",
-    name: "Llama 3.1 8B Instruct",
+    id: "qwen3:1.7b",
+    name: "Qwen 3 1.7B (Fast Multilingual)",
+    parameters: "1.7B",
+    size: "~1.1 GB",
+    family: "Qwen",
+  },
+  {
+    id: "qwen3:4b",
+    name: "Qwen 3 4B (Balanced)",
+    parameters: "4B",
+    size: "~2.5 GB",
+    family: "Qwen",
+  },
+  {
+    id: "llama4:8b",
+    name: "Llama 4 8B (Heavyweight)",
     parameters: "8B",
     size: "~4.9 GB",
     family: "Llama",
   },
 ];
+
+/**
+ * The default model to auto-select for new users after they pull it.
+ * Gemma 4 E2B — smallest, fastest, fits the project's 1-2B target.
+ */
+export const DEFAULT_OLLAMA_MODEL = "gemma4:e2b";
 
 // ─── Adapter State (internal) ─────────────────────────────────────
 

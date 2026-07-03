@@ -10,6 +10,7 @@ import { AiModelsView } from "./AiModelsView";
 import { ApiKeysView } from "./ApiKeysView";
 import { GlossaryView } from "./GlossaryView";
 import { QuickGuideModal } from "./QuickGuideModal";
+import { OllamaOnboardingModal, shouldShowOllamaOnboarding } from "./OllamaOnboardingModal";
 import { InstallPWAButton } from "./InstallPWAButton";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
@@ -46,6 +47,43 @@ export function WorkspaceShell() {
   const [activeNav, setActiveNav] = useState<NavItem | "welcome">("welcome");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+
+  // ─── Ollama Onboarding Modal ────────────────────────────────────
+  // Shows on startup if running in Tauri AND Ollama is not detected.
+  // Skippable — respects user agency. See OllamaOnboardingModal.tsx.
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [onboardingChecking, setOnboardingChecking] = useState(false);
+
+  useEffect(() => {
+    // Check on mount whether we should show the onboarding modal
+    if (shouldShowOllamaOnboarding()) {
+      // Defer slightly so the app shell renders first
+      const timer = setTimeout(async () => {
+        const { isTauriEnvironment, OllamaAdapter } = await import("../lib/adapters");
+        if (!isTauriEnvironment()) return;
+        const adapter = new OllamaAdapter();
+        const healthy = await adapter.isAvailable();
+        if (!healthy) {
+          setShowOnboarding(true);
+        }
+      }, 1500);
+      return () => clearTimeout(timer);
+    }
+  }, []);
+
+  const handleOnboardingRetry = async (): Promise<boolean> => {
+    setOnboardingChecking(true);
+    try {
+      const { OllamaAdapter } = await import("../lib/adapters");
+      const adapter = new OllamaAdapter();
+      const healthy = await adapter.isAvailable();
+      return healthy;
+    } catch {
+      return false;
+    } finally {
+      setOnboardingChecking(false);
+    }
+  };
 
   // ─── Cross-component nav requests ──────────────────────────────
   // Allows deeply-nested components (e.g. the inline "Load Local Model"
@@ -218,6 +256,14 @@ export function WorkspaceShell() {
 
       {/* Interactive guide modal popup */}
       <QuickGuideModal open={showGuide} onClose={() => setShowGuide(false)} />
+
+      {/* Ollama onboarding modal (Tauri only, first run) */}
+      <OllamaOnboardingModal
+        open={showOnboarding}
+        onClose={() => setShowOnboarding(false)}
+        onRetry={handleOnboardingRetry}
+        isChecking={onboardingChecking}
+      />
     </div>
   );
 }
