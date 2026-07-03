@@ -544,13 +544,25 @@ export function TargetEditor({
       </div>
 
       <div className="relative w-full">
+        {/* Placeholder label — rendered above the textarea content area
+            instead of as a native placeholder, so it never overlaps with
+            the ghost-text suggestion box at the bottom. Only shows when
+            the textarea is empty. */}
+        {!translationText && (
+          <div
+            className="absolute top-3.5 right-4 text-sm md:text-base text-muted-foreground/40 font-medium pointer-events-none select-none"
+            dir="rtl"
+          >
+            {isRTL ? "أدخل الترجمة العربية هنا..." : "Enter translation in Arabic..."}
+          </div>
+        )}
         <textarea
           ref={inputRef}
           value={translationText}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
           dir="rtl"
-          placeholder={isRTL ? "أدخل الترجمة العربية هنا..." : "Enter translation in Arabic..."}
+          placeholder=""
           rows={2}
           className="w-full bg-background/50 dark:bg-[#0A0B0E] border dark:border-white/10 border-border/80 rounded-xl p-4 text-sm md:text-base text-foreground text-right focus:outline-none focus:border-primary/50 font-medium leading-relaxed resize-none transition-all"
         />

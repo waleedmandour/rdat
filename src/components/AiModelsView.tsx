@@ -83,12 +83,27 @@ export function AiModelsView() {
   const [evaluatingSpecs, setEvaluatingSpecs] = useState<boolean>(true);
 
   // ─── Detect active adapter on mount ──────────────────────────────
+  // Safety: if getActiveAdapter() hasn't resolved in 10 seconds, force
+  // the loading state to clear and show the "no adapter" warning. This
+  // prevents the "Detecting engine..." spinner from hanging forever if
+  // both Ollama and WebLLM checks stall (rare, but seen on some Tauri
+  // webviews with broken WebGPU implementations).
   useEffect(() => {
     let cancelled = false;
+    const safetyTimer = setTimeout(() => {
+      if (!cancelled && adapterLoading) {
+        console.warn("[AiModelsView] Adapter detection timed out after 10s — showing no-adapter state.");
+        setAdapter(null);
+        setAdapterLoading(false);
+        setDaemonHealthy(false);
+      }
+    }, 10000);
+
     (async () => {
       setAdapterLoading(true);
       const activeAdapter = await getActiveAdapter();
       if (cancelled) return;
+      clearTimeout(safetyTimer);
       setAdapter(activeAdapter);
 
       if (activeAdapter) {
@@ -127,7 +142,7 @@ export function AiModelsView() {
       }
       setAdapterLoading(false);
     })();
-    return () => { cancelled = true; };
+    return () => { cancelled = true; clearTimeout(safetyTimer); };
   }, []);
 
   // ─── Hardware specs detection ────────────────────────────────────
