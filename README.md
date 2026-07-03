@@ -2,20 +2,26 @@
 
 **Professional English-to-Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Deploy](https://img.shields.io/badge/Deploy-Vercel-000?logo=vercel&logoColor=white)](https://vercel.com)
+[![Version](https://img.shields.io/badge/Version-0.2.0_Pre--release-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
-[![PWA Ready](https://img.shields.io/badge/PWA-Ready-6366f1?logo=pwa&logoColor=white)](https://github.com/waleedmandour/rdat)
-[![WebGPU](https://img.shields.io/badge/WebGPU-Local_LLM-22c55e?logo=webgpu&logoColor=white)](https://caniuse.com/webgpu)
+[![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
+[![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
+[![PWA Ready](https://img.shields.io/badge/PWA-Optional-6366f1?logo=pwa&logoColor=white)](https://github.com/waleedmandour/rdat)
 
 ---
 
 ## Overview
 
-RDAT Copilot is an AI-powered, browser-native translation workspace purpose-built for professional English-to-Arabic translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline — from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback — delivering real-time suggestions while keeping translators in full control of every word.
+RDAT Copilot is an AI-powered translation workspace purpose-built for professional English-to-Arabic translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline — from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback — delivering real-time suggestions while keeping translators in full control of every word.
 
-Built as a Progressive Web App (PWA), RDAT Copilot runs entirely in the browser with optional cloud augmentation via Google Gemini 2.5 Flash. Its local-first architecture ensures data privacy and offline capability: the Local Translation Engine (LTE) and on-device WebGPU models operate without any network egress, while glossary databases, translation memories, and segment history persist across sessions through IndexedDB.
+As of v0.2.0, RDAT Copilot ships in **two complementary forms**, sharing a single React/Vite frontend:
 
-The system is designed around the principle that professional translators should never have to choose between speed and quality. Ghost-text suggestions appear inline as you type, drawn from progressively smarter tiers that balance latency against nuance — from sub-5ms n-gram matches to RAG-enriched LLM completions that respect your loaded terminology, to cloud-scale Gemini translations for complex or ambiguous passages.
+| Distribution | Best for | Install size | Local LLM |
+|---|---|---|---|
+| **Tauri Desktop App** (Windows, macOS, Linux) | Daily professional use; fastest inference; full offline | ~15 MB app + ~1.5 GB model | Ollama (PRIMARY) |
+| **PWA on Vercel** (browser) | Try-before-install; mobile; locked-down machines | Zero install (browser) | WebLLM via WebGPU (optional) |
+
+The system's primary engine is the **local LLM** (Ollama in desktop mode, WebLLM in browser mode). Gemini 2.5 Flash is a **secondary fallback** for when local tiers yield low confidence, complex passages, or when no local model is available. This local-first architecture ensures data privacy and offline capability: the Local Translation Engine (LTE) and on-device LLM models operate without any network egress, while glossary databases, translation memories, and segment history persist across sessions through IndexedDB.
 
 ---
 
@@ -33,46 +39,27 @@ RDAT Copilot's suggestion engine operates through a cascading three-tier pipelin
 │    │  N-gram / fuzzy / sentence-split matching against corpus  │
 │    │  Latency: < 5 ms  |  Channel: lte                        │
 │    │                                                            │
-│  Tier 1 ─ RAG-LLM (WebGPU On-Device Model)                    │
+│  Tier 1 ─ Local LLM (PRIMARY ENGINE)                           │
 │    │  RAG-augmented inference with selective glossary context  │
-│    │  Latency: 200–2000 ms  |  Channel: rag / webllm          │
-│    │  Prefetch on segment focus for zero-latency display       │
+│    │  Tauri:  Ollama (native CUDA/Metal, gemma4:e2b default)   │
+│    │  PWA:    WebLLM (WebGPU, q4f16_1 quantization)            │
+│    │  Latency: 200–2000 ms  |  Channel: local-llm              │
 │    │                                                            │
-│  Tier 2 ─ Cloud Gemini (Gemini 2.5 Flash)                     │
-│       Serverless API routes with structured JSON output        │
+│  Tier 2 ─ Cloud Gemini (SECONDARY FALLBACK)                    │
+│       Tauri:  Rust-side reqwest proxy → Gemini REST API        │
+│       PWA:    Vercel serverless functions → @google/genai SDK  │
 │       Latency: 500–3000 ms  |  Channel: gemini                │
 │       Supports burst (3 candidates) and full translation       │
 └─────────────────────────────────────────────────────────────────┘
 ```
 
-#### Tier 0 — LTE (Local Translation Engine)
+### LLMAdapter Abstraction
 
-The LTE provides instant, zero-network suggestions using a multi-strategy matching engine against the loaded corpus. It performs exact matching, partial/prefix alignment, trigram similarity scoring, and multi-sentence splitting — all against an in-memory normalized English-key index. When the user has typed an Arabic prefix, the LTE computes the ghost remainder by aligning the prefix against the matched Arabic entry using fuzzy trigram alignment, allowing for minor typographical variations.
+Both local backends (Ollama and WebLLM) implement a unified `LLMAdapter` interface (`src/lib/llm-adapter.ts`), so the rest of the application — including the editor, status bar, and tier-fallback logic — works identically regardless of which backend is active. The adapter factory (`src/lib/adapters/index.ts`) auto-detects the environment at runtime:
 
-The LTE is seeded with approximately 80 professionally curated EN→AR pairs covering CAT terminology, technology, academic, business, and legal domains. Users can extend the corpus by importing glossary JSON files or by adding entries through the Glossary Manager.
-
-#### Tier 1 — RAG-Augmented Local LLM
-
-When the LTE returns no match or a low-confidence result, the on-device WebGPU model generates a RAG-augmented translation. This tier constructs a structured system prompt enriched with the top-*k* most relevant glossary entries retrieved from the LTE via n-gram similarity search. The prompt enforces terminological consistency and instructs the model to use glossary terms preferentially, producing translations that respect the user's loaded domain vocabulary rather than generic output.
-
-Key features of this tier include:
-
-- **Selective RAG context** — Only the top 5 most relevant entries are injected into the system prompt, keeping context within the token limits of smaller models (1.5B–9B parameters) while maximizing domain relevance.
-- **Segment prefetch** — When the translator focuses a new segment, a full RAG translation is computed and cached before typing begins. The ghost-text system compares the user's typed prefix against this cached translation to instantly produce a suggestion remainder, with no LLM call needed until the translator deviates significantly.
-- **Deviation-triggered re-fetch** — If the translator's typed text deviates more than 60% from the last suggestion (measured by normalized edit distance), the tier automatically re-triggers a fresh RAG inference to keep suggestions aligned with the translator's evolving intent.
-- **Model catalog** — Five quantized models are available, ranging from Qwen 2.5 1.5B (fastest, ~1 GB) to Llama 3.1 8B and Gemma 2 9B (highest quality, ~4–5 GB), all using q4f16_1 quantization for optimal speed/quality tradeoff on WebGPU.
-
-#### Tier 2 — Cloud Gemini
-
-When local tiers yield insufficient results, or when the user operates in cloud-only mode, serverless API routes powered by Gemini 2.5 Flash provide high-quality translations. Three endpoints are available:
-
-| Endpoint | Purpose | Response |
-|----------|---------|----------|
-| `/api/translate/burst` | Generate up to 3 predictive Arabic candidates conditioned on a typed prefix | `{ suggestions: string[] }` |
-| `/api/translate/full` | Generate a complete Arabic translation of a source segment | `{ translation: string }` |
-| `/api/translate/tutor-explain` | Provide pedagogical analysis of a translation attempt with rating, grade, term-by-term coaching, and pitfall warnings | `{ rating, grade, explanation, termsAnalysed, pitfalls }` |
-
-All API routes use the modern Web Standard `fetch` handler pattern (ESM-compatible) and support both server-side `GEMINI_API_KEY` environment variables and per-request user-provided keys.
+1. **Inside Tauri + Ollama daemon reachable** → `OllamaAdapter` (preferred: native CUDA/Metal acceleration, supports Gemma 4 / Qwen 3 / Llama 4)
+2. **Else if WebGPU available** → `WebLLMAdapter` (browser path, or Tauri fallback when Ollama is not installed)
+3. **Else** → `null` (Gemini-only mode; the editor surfaces an amber hint guiding the user to install Ollama)
 
 ### Engine Modes
 
@@ -80,9 +67,9 @@ Three translation pipeline modes are available, selectable via the Settings pane
 
 | Mode | Tier(s) Active | Best For |
 |------|---------------|----------|
-| **Hybrid** (Recommended) | LTE + RAG-LLM + Cloud Gemini | Maximum suggestion quality with graceful fallback |
-| **Local** | LTE + RAG-LLM only | Zero data egress, full offline operation, privacy-sensitive environments |
-| **Cloud** | Gemini API only | Complex passages requiring cloud-scale reasoning, or when WebGPU is unavailable |
+| **Hybrid** (Recommended) | LTE + Local LLM + Cloud Gemini | Maximum suggestion quality with graceful fallback |
+| **Local** | LTE + Local LLM only | Zero data egress, full offline operation, privacy-sensitive environments |
+| **Cloud** | Gemini API only | Complex passages requiring cloud-scale reasoning, or when no local model is available |
 
 ---
 
@@ -94,11 +81,18 @@ A split-pane interface with synchronized source-target segment display. English 
 
 ### Ghost-Text Predictive Completions
 
-Inline ghost-text suggestions appear in real time as translators type. Suggestions are debounced (350 ms) to avoid interfering with typing fluency, and can be accepted with `Tab` (full), `Ctrl+→` (word-by-word), or cycled with `Alt+]`. The three-tier pipeline ensures that instant LTE matches appear first, then RAG-enriched LLM completions refine the suggestion, and finally cloud Gemini candidates arrive as a backstop for ambiguous or complex passages.
+Inline ghost-text suggestions appear in real time as translators type. Suggestions are debounced (350 ms) to avoid interfering with typing fluency, and can be accepted with `Tab` (full), `Ctrl+→` (word-by-word), or cycled with `Alt+]`. A **tier-source badge** next to each suggestion shows which tier produced it — green `LTE`, blue `local-llm` (with model name), or amber `GEMINI` — so translators always know the provenance of a suggestion.
 
-### RAG-Augmented On-Device LLM
+### RAG-Augmented Local LLM (Primary Engine)
 
-The local WebGPU model is enhanced with Retrieval-Augmented Generation (RAG). Before inference, the system retrieves the top-*k* most relevant glossary/translation memory entries from the LTE and injects them into a structured system prompt that enforces terminological consistency. This means on-device translations respect your loaded domain vocabulary — they are not generic LLM output but glossary-aware, context-conditioned suggestions that improve as your corpus grows.
+The local LLM is enhanced with Retrieval-Augmented Generation (RAG). Before inference, the system retrieves the top-*k* most relevant glossary/translation memory entries from the LTE and injects them into a structured system prompt that enforces terminological consistency. This means local-LLM translations respect your loaded domain vocabulary — they are not generic LLM output but glossary-aware, context-conditioned suggestions that improve as your corpus grows.
+
+### Tier-Source Error Surfacing
+
+When a tier fails, the editor surfaces a precise, actionable diagnostic instead of silently swallowing the error:
+- **Tier 1 (local LLM) failures** → amber inline hint with a "Load Local Model" button that jumps to the Models panel
+- **Tier 2 (Gemini) failures** → quiet gray inline hint with a "Set Gemini API Key" button
+- A per-session toast dedup prevents spamming the same error on every keystroke
 
 ### GTR Glossary & Terminology Management
 
@@ -108,9 +102,13 @@ A dedicated terminology management system supporting JSON file import, pre-loade
 
 An interactive pedagogical panel that evaluates active translation drafts. Powered by Gemini with structured JSON output, it provides a numerical rating (0–100), letter grade, detailed stylistic and grammatical analysis, per-term terminology coaching with contextual fit assessment, and common translation pitfall warnings. When offline or without an API key, a built-in local pedagogical engine provides fallback diagnostics.
 
-### PWA & Offline Support
+### Ollama Onboarding (Tauri only)
 
-RDAT Copilot is a fully installable Progressive Web App. It includes a Web App Manifest with standalone display mode, a Service Worker with network-first navigation and cache-first static asset strategy, IndexedDB-based offline storage for all terminology, glossary, and translation data, and a native install prompt via the `beforeinstallprompt` event on supported browsers. The entire LTE and local LLM pipeline operates offline without any network dependency.
+On first run in Tauri mode, if the Ollama daemon is not detected, a 3-step skippable onboarding modal guides the user through: (1) downloading Ollama from ollama.com, (2) starting the daemon (platform-specific instructions), and (3) verifying the connection. Users can skip and continue in degraded LTE-only mode — the app respects user agency and never blocks the editor.
+
+### PWA & Offline Support (browser mode)
+
+When deployed as a PWA on Vercel, RDAT Copilot is a fully installable Progressive Web App. It includes a Web App Manifest with standalone display mode, a Service Worker with network-first navigation and cache-first static asset strategy, IndexedDB-based offline storage, and a native install prompt via the `beforeinstallprompt` event on supported browsers.
 
 ---
 
@@ -123,15 +121,30 @@ RDAT Copilot is a fully installable Progressive Web App. It includes a Web App M
 | State Management | Zustand 5 |
 | Animations | Motion (Framer Motion) |
 | Icons | Lucide React |
-| On-Device AI | `@mlc-ai/web-llm` — WebGPU-accelerated LLM inference in the browser |
-| Cloud AI | Google Gemini 2.5 Flash via `@google/genai` SDK |
-| Serverless API | Vercel Serverless Functions (Node.js 20.x runtime) |
+| **Desktop Shell** | **Tauri 2.11.x** (Rust backend with reqwest, tokio, serde) |
+| **Primary Local LLM** | **Ollama** (Gemma 4 E2B default; Qwen 3, Llama 4 also supported) |
+| Browser Local LLM | `@mlc-ai/web-llm` (WebGPU-accelerated, fallback when no Ollama) |
+| Cloud AI | Google Gemini 2.5 Flash |
+| Cloud Proxy (Tauri) | Rust `gemini_translate` command via reqwest → Gemini REST API |
+| Cloud Proxy (PWA) | Vercel Serverless Functions (Node.js 22.x runtime) → `@google/genai` SDK |
 | Local Development | Express.js (Gemini API proxy) via `tsx` |
 | Storage | IndexedDB (custom dual-storage layer with chunked read/write) |
-| PWA | Service Worker + Web App Manifest |
+| PWA (optional) | Service Worker + Web App Manifest |
 | Language | TypeScript 5.8 |
 
-### Supported On-Device Models
+### Supported Local Models
+
+#### Ollama Catalog (Tauri — Primary)
+
+| Tag | Model | Parameters | Approx. Size | Notes |
+|-----|-------|-----------|-------------|-------|
+| `gemma4:e2b` | **Gemma 4 E2B** (recommended starter) | 2B (Effective) | ~1.5 GB | Auto-selected default for new users |
+| `gemma4:e4b` | Gemma 4 E4B | 4B (Effective) | ~3.0 GB | Higher quality, 2× download |
+| `qwen3:1.7b` | Qwen 3 1.7B | 1.7B | ~1.1 GB | Fast multilingual |
+| `qwen3:4b` | Qwen 3 4B | 4B | ~2.5 GB | Balanced |
+| `llama4:8b` | Llama 4 8B | 8B | ~4.9 GB | Heavyweight |
+
+#### WebLLM Catalog (PWA — Fallback when no Ollama)
 
 | Catalog ID | Model | Parameters | Quantization | Approx. Size |
 |------------|-------|-----------|-------------|-------------|
@@ -141,7 +154,7 @@ RDAT Copilot is a fully installable Progressive Web App. It includes a Web App M
 | `gemma-7b` | Gemma 2 9B IT | 9B | q4f16_1 | ~5 GB |
 | `llama3-8b` | Llama 3.1 8B Instruct | 8B | q4f16_1 | ~4.5 GB |
 
-All models are downloaded on demand via the browser Cache API and persist across sessions. WebGPU availability is required for on-device inference; see [caniuse.com/webgpu](https://caniuse.com/webgpu) for browser support.
+> **Note:** WebLLM's catalog lags behind Ollama's. For the latest models (Gemma 4, Qwen 3, Llama 4), use the Tauri desktop app with Ollama.
 
 ---
 
@@ -149,61 +162,69 @@ All models are downloaded on demand via the browser Cache API and persist across
 
 ```
 rdat/
-├── api/
-│   ├── _lib/
-│   │   └── gemini.ts                     # Shared Gemini SDK helper (lazy init)
-│   └── translate/
-│       ├── burst.ts                      # Ghost-text burst suggestions (3 candidates)
-│       ├── full.ts                       # Full segment translation
-│       └── tutor-explain.ts             # AI Translation Tutor analysis
-├── public/
-│   ├── manifest.webmanifest              # PWA manifest
-│   ├── sw.js                             # Service worker
-│   ├── icon-192.png                      # PWA icon (192x192)
-│   └── icon-512.png                      # PWA icon (512x512)
+├── api/                                    # Vercel serverless functions (PWA mode)
+│   ├── _lib/gemini.ts                     # User-owned-key Gemini SDK helper
+│   ├── translate/
+│   │   ├── burst.ts                       # Ghost-text burst suggestions
+│   │   ├── full.ts                        # Full segment translation
+│   │   └── tutor-explain.ts               # AI Translation Tutor analysis
+│   └── health.ts                          # Runtime health-check endpoint
+├── src-tauri/                              # Tauri 2 desktop backend (Rust)
+│   ├── Cargo.toml                         # Rust deps: tauri 2, reqwest, tokio
+│   ├── tauri.conf.json                    # App identity, window, bundle config
+│   ├── capabilities/default.json          # WebView permissions
+│   ├── icons/                             # Generated app icons (all platforms)
+│   └── src/
+│       ├── main.rs                        # Binary entry
+│       ├── lib.rs                         # Tauri builder + command registration
+│       └── commands/
+│           ├── ollama.rs                  # ollama_health/list/pull/remove/translate
+│           └── gemini.rs                  # gemini_translate (Rust→Gemini REST proxy)
+├── public/                                 # PWA assets (manifest, sw, icons)
 ├── src/
 │   ├── components/
 │   │   ├── editors/
-│   │   │   ├── SourceEditor.tsx           # Source text panel with import
-│   │   │   ├── TargetEditor.tsx           # Translation editor with ghost-text pipeline
-│   │   │   └── TranslationWorkspace.tsx   # Main workspace with sidebar
-│   │   ├── AiModelsView.tsx              # WebGPU model catalog & hardware profiler
-│   │   ├── ApiKeysView.tsx               # Gemini API key management
-│   │   ├── GlossaryView.tsx              # Terminology database manager
-│   │   ├── InstallPWAButton.tsx          # PWA install prompt banner
-│   │   ├── QuickGuideModal.tsx           # Keyboard shortcuts reference
-│   │   ├── Settings.tsx                  # App settings panel
-│   │   ├── Sidebar.tsx                   # Navigation sidebar
-│   │   ├── StatusBar.tsx                 # System status footer (WebGPU, LTE, RAG)
-│   │   └── WelcomeTab.tsx               # Dashboard landing page
-│   ├── context/
-│   │   ├── LanguageContext.tsx            # i18n provider (EN/AR) with RTL switching
-│   │   └── ToastContext.tsx              # Toast notification system
+│   │   │   ├── SourceEditor.tsx
+│   │   │   ├── TargetEditor.tsx           # Ghost-text pipeline + tier badges
+│   │   │   └── TranslationWorkspace.tsx
+│   │   ├── AiModelsView.tsx              # Adapter-aware model catalog (Ollama/WebLLM)
+│   │   ├── ApiKeysView.tsx               # Gemini key management + Test button
+│   │   ├── GlossaryView.tsx
+│   │   ├── OllamaOnboardingModal.tsx     # 3-step skippable Ollama setup guide
+│   │   ├── QuickGuideModal.tsx
+│   │   ├── Settings.tsx
+│   │   ├── Sidebar.tsx
+│   │   ├── StatusBar.tsx
+│   │   └── WelcomeTab.tsx
+│   ├── context/                           # Language + Toast providers
 │   ├── hooks/
-│   │   ├── useDualStorage.ts             # IndexedDB → LTE loading with seed corpus
-│   │   ├── useGemini.ts                  # Gemini API integration with retry logic
-│   │   ├── useLocalAgent.ts              # Local agent state
-│   │   ├── useRAG.ts                     # RAG/LTE search hook with live stats
-│   │   └── useWebLLM.ts                 # WebGPU model lifecycle management
-│   ├── i18n/
-│   │   └── translations.ts               # EN/AR UI translation strings
+│   │   ├── useGemini.ts                  # Tauri/PWA Gemini dispatcher
+│   │   ├── useWebLLM.ts                  # WebGPU model lifecycle
+│   │   ├── useRAG.ts                     # RAG/LTE search hook
+│   │   └── useDualStorage.ts             # IndexedDB → LTE loading
 │   ├── lib/
-│   │   ├── dual-storage.ts               # IndexedDB CRUD operations
-│   │   ├── local-llm-engine.ts           # WebGPU LLM engine + RAG + prefetch cache
-│   │   ├── local-translation-engine.ts   # LTE n-gram / fuzzy / sentence-split matching
-│   │   ├── seed-corpus.ts                # ~80 EN→AR seed pairs (CAT, tech, academic, legal)
-│   │   └── utils.ts                      # Utility functions
+│   │   ├── llm-adapter.ts                # LLMAdapter interface + shared prompts
+│   │   ├── adapters/
+│   │   │   ├── index.ts                  # Factory: getActiveAdapter()
+│   │   │   ├── ollama-adapter.ts         # Ollama backend (Tauri)
+│   │   │   └── web-llm-adapter.ts        # WebLLM backend (browser)
+│   │   ├── gemini-direct.ts              # Tauri/PWA Gemini call dispatcher
+│   │   ├── local-llm-engine.ts           # WebLLM engine + RAG + prefetch
+│   │   ├── local-translation-engine.ts   # LTE n-gram / fuzzy matching
+│   │   ├── seed-corpus.ts                # ~80 EN→AR seed pairs
+│   │   └── utils.ts
 │   ├── stores/
-│   │   ├── settings-store.ts             # Zustand settings (engine mode, API keys, models)
-│   │   └── workspace-store.ts            # Zustand workspace (source/target segments)
-│   ├── types.ts                          # TypeScript type definitions
-│   ├── App.tsx                           # Root component
-│   ├── main.tsx                          # Entry point
-│   └── index.css                         # Tailwind + theme variables
-├── server.ts                             # Express dev server (Gemini API proxy)
-├── vercel.json                           # Vercel deployment configuration
-├── vite.config.ts                        # Vite build configuration
-├── tsconfig.json                         # TypeScript configuration
+│   │   ├── settings-store.ts             # Zustand settings
+│   │   ├── workspace-store.ts            # Zustand workspace
+│   │   └── ui-store.ts                   # Cross-component nav requests
+│   ├── types.ts
+│   ├── App.tsx
+│   ├── main.tsx
+│   └── index.css
+├── server.ts                             # Express dev server (PWA dev)
+├── vercel.json                           # Vercel PWA deployment config
+├── vite.config.ts
+├── tsconfig.json
 └── package.json
 ```
 
@@ -211,53 +232,91 @@ rdat/
 
 ## Getting Started
 
-### Prerequisites
+### Option A — Tauri Desktop App (Recommended for daily use)
 
-- **Node.js** 18+ and **npm**
-- **WebGPU-compatible browser** (Chrome 113+, Edge 113+) for on-device LLM inference
-- **Google Gemini API key** (optional, for cloud features) — obtain from [Google AI Studio](https://aistudio.google.com/apikey)
+#### Prerequisites
 
-### Local Development
+- **Node.js** 22+ and **npm**
+- **Rust toolchain** — install via [rustup.rs](https://rustup.rs/) (Rust 1.77+)
+- **Tauri 2 system prerequisites** — see [v2.tauri.app/prerequisites](https://v2.tauri.app/start/prerequisites/)
+  - **Windows:** Microsoft Visual Studio C++ Build Tools
+  - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
+  - **Linux:** `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
+- **[Ollama](https://ollama.com/download)** — the local LLM daemon
 
-1. **Clone the repository:**
-   ```bash
-   git clone https://github.com/waleedmandour/rdat.git
-   cd rdat
-   ```
-
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Configure Gemini API key (optional, for cloud features):**
-   ```bash
-   echo "GEMINI_API_KEY=your-key-here" > .env
-   ```
-   The API key can also be entered directly in the app's **API Keys** settings panel at runtime.
-
-4. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-   This launches the Express server with Vite HMR at `http://localhost:3000`.
-
-### Production Build
+#### Setup
 
 ```bash
-npm run build
+git clone https://github.com/waleedmandour/rdat.git
+cd rdat
+npm install
+
+# Generate Tauri icons from the PWA icon (one-time)
+npm run tauri:icon
+
+# Start Tauri dev mode (boots Rust backend + Vite dev server + native window)
+npm run tauri:dev
+# First run takes 5–10 min to compile Rust dependencies
 ```
 
-This produces the Vite static build in `dist/`. The Vercel deployment configuration handles both the static assets and the serverless API routes.
+On first launch, if Ollama is not running, the onboarding modal will guide you through installation. Once Ollama is running:
 
-### Deploy to Vercel
+1. Open the **Models** panel
+2. Click **Pull** on `gemma4:e2b` (recommended starter, ~1.5 GB download)
+3. After the pull completes, click **Load**
+4. Start translating — ghost-text suggestions will appear with a blue `GEMMA4:E2B` badge
 
-The repository includes a `vercel.json` configuration. Simply connect the GitHub repository to Vercel and it will auto-deploy. Key configuration points:
+#### Production Build
+
+```bash
+npm run tauri:build
+# Produces installers in src-tauri/target/release/bundle/:
+#   Windows: .msi + .exe (NSIS)
+#   macOS:   .dmg + .app
+#   Linux:   .deb, .rpm, .AppImage
+```
+
+### Option B — PWA on Vercel (Try before install)
+
+#### Prerequisites
+
+- **Node.js** 22+ and **npm**
+- **WebGPU-compatible browser** (Chrome 113+, Edge 113+) for on-device LLM inference in the browser
+- **Google Gemini API key** (optional, for cloud fallback) — obtain from [Google AI Studio](https://aistudio.google.com/apikey)
+
+#### Setup
+
+```bash
+git clone https://github.com/waleedmandour/rdat.git
+cd rdat
+npm install
+
+# For local dev (optional .env for dev-only key fallback):
+echo "GEMINI_API_KEY=your-key-here" > .env
+
+npm run dev
+# Launches Express + Vite HMR at http://localhost:3000
+```
+
+#### Deploy to Vercel
+
+The repository includes a `vercel.json` configuration. Connect the GitHub repository to Vercel and it will auto-deploy. **No environment variables are required** — the app uses a user-owned-key model where each user enters their own Gemini API key in the app's API Keys panel.
 
 - **Framework:** Vite (auto-detected)
-- **API routes:** Files under `api/**/*.ts` are deployed as serverless functions with Node.js 20.x runtime
-- **Environment variables:** Set `GEMINI_API_KEY` in the Vercel project settings (Settings → Environment Variables)
-- **SPA routing:** All non-API routes are rewritten to `index.html` for client-side routing
+- **API routes:** Files under `api/**/*.ts` are deployed as serverless functions (Node.js 22.x runtime)
+- **Environment variables:** None required (user-owned-key model)
+- **SPA routing:** All non-API routes are rewritten to `index.html`
+
+---
+
+## Gemini API Key (User-Owned Model)
+
+RDAT Copilot uses a **user-owned-key** model for Gemini access. Each user enters their own API key in the app's **API Keys** panel — the key is stored in the browser's localStorage and sent with each request. No keys are stored server-side.
+
+- **In Tauri mode:** keys are sent to the Rust backend, which calls the Gemini REST API via `reqwest`. This avoids CORS issues and works with Google's post-June-19-2026 API key restrictions.
+- **In PWA mode:** keys are sent to the Vercel serverless functions, which use the `@google/genai` SDK to call Gemini.
+
+Get a free key from [Google AI Studio](https://aistudio.google.com/apikey). The API Keys panel includes a **Test Key** button that verifies the key works by performing a test translation.
 
 ---
 
@@ -281,10 +340,12 @@ RDAT Copilot supports full bilingual UI (English/Arabic) with automatic RTL layo
 
 ## Roadmap
 
-- **Arabic-to-English (AR→EN) translation direction** — The current pipeline is unidirectional (EN→AR). Future releases will introduce a reverse LTE index, bidirectional system prompts, and AR→EN seed corpus entries to support full bidirectional translation workflows.
-- **Streaming inference** — Server-Sent Events streaming for cloud Gemini translations to reduce time-to-first-token on the Vercel Free Tier.
-- **Vercel function warm-up** — Periodic keep-alive pings to mitigate cold-start latency on serverless API routes.
-- **Onboarding flow** — Guided first-run experience for WebGPU setup, model selection, and glossary import.
+- **Continuous-assistance multi-trigger system** — Idle-pause re-engagement, post-accept re-suggestion, and post-dismissal cooldown to provide Google-style autocomplete that persists during translator thinking pauses (2–3 s).
+- **Streaming inference** — Streaming token generation for both Ollama and WebLLM to reduce time-to-first-token below 800 ms.
+- **Context window expansion** — Pass previous/next segment source to the LLM for terminological consistency across segments.
+- **Arabic-to-English (AR→EN) translation direction** — Currently unidirectional (EN→AR).
+- **CI matrix for cross-platform builds** — GitHub Actions for Windows, macOS, and Linux installer production.
+- **Updater signing** — Generate a Tauri updater keypair and host signed manifests on GitHub Releases.
 
 ---
 

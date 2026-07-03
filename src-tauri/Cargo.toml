@@ -1,6 +1,6 @@
 [package]
 name = "rdat"
-version = "1.0.0"
+version = "0.2.0"
 description = "RDAT Copilot — Professional English-to-Arabic CAT Environment"
 authors = ["Dr. Waleed Mandour <w.abumandour@squ.edu.om>"]
 license = "MIT"

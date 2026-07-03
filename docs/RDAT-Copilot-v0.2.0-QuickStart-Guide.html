@@ -1,0 +1,513 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>RDAT Copilot v0.2.0 — Quick Start Guide</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Noto+Sans+SC:wght@300;400;500;700;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+@page {
+  size: 720px 1020px;
+  margin: 0;
+}
+:root {
+  --c-bg: #0A0B0E;
+  --c-surface: #111318;
+  --c-surface-2: #16181F;
+  --c-text: #E8E6E3;
+  --c-muted: #8B8F99;
+  --c-primary: #6366F1;
+  --c-primary-dim: #4F46E5;
+  --c-emerald: #10B981;
+  --c-amber: #F59E0B;
+  --c-rose: #F43F5E;
+  --c-border: rgba(255, 255, 255, 0.08);
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 720px;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: 'Inter', 'Noto Sans SC', sans-serif;
+  font-size: 13px;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+@media screen {
+  html {
+    height: auto;
+    display: flex;
+    justify-content: center;
+    background: #1a1a1a;
+  }
+  body {
+    margin: 20px auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ─── COVER PAGE ─── */
+.cover {
+  width: 720px;
+  height: 1020px;
+  box-sizing: border-box;
+  break-after: page;
+  overflow: hidden;
+  position: relative;
+  background:
+    radial-gradient(circle at 85% 15%, rgba(99, 102, 241, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 15% 85%, rgba(16, 185, 129, 0.12) 0%, transparent 45%),
+    var(--c-bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 70px 65px;
+}
+.cover::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, var(--c-primary) 0%, var(--c-emerald) 100%);
+}
+.cover-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 11px;
+  font-weight: 500;
+  letter-spacing: 3px;
+  color: var(--c-primary);
+  text-transform: uppercase;
+  margin-bottom: 28px;
+}
+.cover-title {
+  font-size: 64px;
+  font-weight: 900;
+  line-height: 1.02;
+  letter-spacing: -1.5px;
+  margin: 0 0 14px 0;
+  background: linear-gradient(180deg, #FFFFFF 0%, #B8BCC8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.cover-subtitle {
+  font-size: 18px;
+  font-weight: 400;
+  color: var(--c-muted);
+  line-height: 1.5;
+  margin: 0 0 40px 0;
+  max-width: 480px;
+}
+.cover-arabic {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--c-emerald);
+  direction: rtl;
+  text-align: right;
+  margin: 0 0 50px 0;
+  font-family: 'Noto Sans SC', sans-serif;
+}
+.cover-meta {
+  display: flex;
+  gap: 32px;
+  margin-top: 20px;
+  padding-top: 28px;
+  border-top: 1px solid var(--c-border);
+}
+.cover-meta-item {
+  flex: 1;
+}
+.cover-meta-label {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 1.5px;
+  color: var(--c-muted);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.cover-meta-value {
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--c-text);
+}
+.cover-badge {
+  position: absolute;
+  top: 70px;
+  right: 65px;
+  padding: 8px 14px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 6px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--c-primary);
+  letter-spacing: 1px;
+}
+.cover-footer {
+  position: absolute;
+  bottom: 40px;
+  left: 65px;
+  right: 65px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--c-muted);
+  letter-spacing: 1px;
+}
+
+/* ─── CONTENT PAGE ─── */
+.main-content {
+  padding: 38px 50px 28px 50px;
+}
+
+.section-tag {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 2px;
+  color: var(--c-primary);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+}
+.section-title {
+  font-size: 20px;
+  font-weight: 800;
+  color: var(--c-text);
+  letter-spacing: -0.3px;
+  margin: 0 0 6px 0;
+}
+.divider {
+  height: 2px;
+  width: 32px;
+  background: var(--c-primary);
+  margin-bottom: 10px;
+}
+.body-text {
+  font-size: 12px;
+  line-height: 1.55;
+  color: var(--c-text);
+  margin: 0 0 8px 0;
+}
+.body-text-muted {
+  color: var(--c-muted);
+}
+
+/* Chapter header — keep with first content block */
+.chapter-header {
+  break-after: avoid;
+  break-inside: avoid;
+  margin-top: 18px;
+}
+.chapter-header:first-child {
+  margin-top: 0;
+}
+
+/* Steps */
+.step {
+  break-inside: avoid;
+  margin-bottom: 6px;
+  padding: 8px 12px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-left: 3px solid var(--c-primary);
+  border-radius: 6px;
+}
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.step-num {
+  width: 22px;
+  height: 22px;
+  background: var(--c-primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'JetBrains Mono', monospace;
+  flex-shrink: 0;
+}
+.step-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text);
+}
+.step-body {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--c-muted);
+  padding-left: 32px;
+}
+.step-body code {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--c-surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--c-emerald);
+  font-size: 10.5px;
+}
+
+/* Badge grid for keyboard shortcuts */
+.kbd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 6px;
+  margin-top: 6px;
+  /* no break-inside: avoid on the grid — individual items handle it */
+}
+.kbd-item {
+  break-inside: avoid;
+  padding: 6px 8px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.kbd-key {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  padding: 2px 5px;
+  border-radius: 3px;
+  color: var(--c-primary);
+  text-align: center;
+}
+.kbd-action {
+  font-size: 9.5px;
+  color: var(--c-text);
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.2;
+}
+
+/* Tier table */
+.tier-table {
+  margin-top: 6px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tier-row {
+  display: grid;
+  grid-template-columns: 90px 1fr 90px;
+  align-items: center;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 10.5px;
+}
+.tier-row:last-child { border-bottom: none; }
+.tier-row.header {
+  background: var(--c-surface-2);
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--c-muted);
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+.tier-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+}
+.tier-lte { background: rgba(16, 185, 129, 0.2); color: var(--c-emerald); }
+.tier-llm { background: rgba(99, 102, 241, 0.2); color: var(--c-primary); }
+.tier-gemini { background: rgba(245, 158, 11, 0.2); color: var(--c-amber); }
+
+/* Tip callout */
+.tip {
+  margin-top: 8px;
+  padding: 9px 12px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 6px;
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--c-text);
+  /* no break-inside: avoid — let it flow if needed */
+}
+.tip strong { color: var(--c-emerald); }
+
+/* Footer */
+.page-footer {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--c-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--c-muted);
+  letter-spacing: 1px;
+}
+
+/* Closing block — children handle their own break-inside */
+.closing-block {
+  /* no break-inside rule — let children flow naturally */
+}
+
+</style>
+</head>
+<body>
+
+<!-- ─── PAGE 1: COVER ─── -->
+<div class="cover">
+  <div class="cover-badge">v0.2.0 PRE-RELEASE</div>
+
+  <div class="cover-tag">Quick Start Guide</div>
+  <h1 class="cover-title">RDAT<br>Copilot</h1>
+  <p class="cover-subtitle">Professional English-to-Arabic Computer-Assisted Translation environment with a three-tier predictive ghost-text pipeline powered by local Ollama LLMs.</p>
+  <p class="cover-arabic">مساعد الترجمة الاحترافي من الإنجليزية إلى العربية</p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Engine</div>
+      <div class="cover-meta-value">Ollama + Gemma 4</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">Platforms</div>
+      <div class="cover-meta-value">Windows · macOS · Linux</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">License</div>
+      <div class="cover-meta-value">MIT</div>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>Dr. Waleed Mandour · Sultan Qaboos University</span>
+    <span>github.com/waleedmandour/rdat</span>
+  </div>
+</div>
+
+<!-- ─── PAGE 2: CONTENT ─── -->
+<div class="main-content">
+
+  <!-- Section 1: Installation -->
+  <div class="chapter-header">
+    <div class="section-tag">Part 1</div>
+    <h2 class="section-title">Install Ollama &amp; Pull Your First Model</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">RDAT Copilot uses <strong>Ollama</strong> as its primary local LLM engine. Ollama runs entirely on your machine — no data leaves your device.</p>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div class="step-title">Download &amp; install Ollama</div>
+    </div>
+    <div class="step-body">Visit <code>ollama.com/download</code> and download the installer for your platform. Run the installer — on Windows and macOS, Ollama starts automatically. On Linux, run <code>ollama serve</code> in a terminal.</div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div class="step-title">Launch RDAT Copilot</div>
+    </div>
+    <div class="step-body">Open the RDAT Copilot desktop app. On first run, an onboarding modal will appear to verify Ollama is running. Click <strong>Check now</strong> — if successful, the modal dismisses automatically. If you skip it, the app runs in degraded LTE-only mode.</div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">3</div>
+      <div class="step-title">Pull Gemma 4 E2B (recommended starter)</div>
+    </div>
+    <div class="step-body">Open the <strong>Models</strong> panel. Click <strong>Pull</strong> on <code>gemma4:e2b</code>. The ~1.5 GB download takes 2–10 minutes. Larger alternatives: <code>gemma4:e4b</code> (~3 GB) or <code>qwen3:4b</code> (~2.5 GB).</div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">4</div>
+      <div class="step-title">Load the model</div>
+    </div>
+    <div class="step-body">After the pull completes, click <strong>Load</strong> on the same card. The status banner turns green and shows <code>Active model: gemma4:e2b</code>. The model stays loaded for 5 minutes of inactivity (Ollama's default keep-alive).</div>
+  </div>
+
+  <div class="tip">
+    <strong>Tip:</strong> If you skip Ollama installation, the app still works — but only the LTE (corpus match) tier will produce suggestions. To enable the local LLM tier, install Ollama and load a model.
+  </div>
+
+  <!-- Section 2: Translation Workflow -->
+  <div class="chapter-header">
+    <div class="section-tag">Part 2</div>
+    <h2 class="section-title">Translate with Ghost-Text Suggestions</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">Click <strong>Launch Editor</strong> from the dashboard. Paste English source text in the left panel — it's auto-segmented into sentences. Click any segment to start translating. As you type Arabic, ghost-text suggestions appear inline with a colored badge showing the source tier.</p>
+
+  <div class="tier-table">
+    <div class="tier-row header">
+      <div>Badge</div>
+      <div>Source</div>
+      <div>Latency</div>
+    </div>
+    <div class="tier-row">
+      <div><span class="tier-badge tier-lte">LTE</span></div>
+      <div>Local Translation Engine — instant corpus match (~80 seed pairs + your glossary)</div>
+      <div>&lt; 5 ms</div>
+    </div>
+    <div class="tier-row">
+      <div><span class="tier-badge tier-llm">GEMMA4</span></div>
+      <div>Local LLM via Ollama — RAG-augmented, glossary-aware (PRIMARY ENGINE)</div>
+      <div>200–2000 ms</div>
+    </div>
+    <div class="tier-row">
+      <div><span class="tier-badge tier-gemini">GEMINI</span></div>
+      <div>Cloud fallback via Gemini 2.5 Flash (optional, requires API key)</div>
+      <div>500–3000 ms</div>
+    </div>
+  </div>
+
+  <div class="kbd-grid">
+    <div class="kbd-item">
+      <div class="kbd-key">Tab</div>
+      <div class="kbd-action">Accept full suggestion</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Ctrl + →</div>
+      <div class="kbd-action">Accept next word</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Alt + ]</div>
+      <div class="kbd-action">Cycle candidates</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Ctrl + ↵</div>
+      <div class="kbd-action">Confirm segment</div>
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>Optional Gemini fallback:</strong> Add your key in <strong>API Keys</strong> panel from <code>aistudio.google.com/apikey</code>. Stored locally; sent via Rust backend only.
+  </div>
+
+  <div class="page-footer">
+    <span>RDAT COPILOT · v0.2.0 · QUICK START GUIDE</span>
+    <span>PAGE 2 / 2</span>
+  </div>
+
+</div>
+
+</body>
+</html>
