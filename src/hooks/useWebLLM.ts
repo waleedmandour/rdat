@@ -12,16 +12,20 @@ import {
   type LLMEngineState,
 } from "../lib/local-llm-engine";
 import { useSettingsStore } from "../stores/settings-store";
+import { isTauriEnvironment } from "../lib/adapters/ollama-adapter";
 
 /**
  * Hook that manages the WebGPU / Local LLM lifecycle.
  *
- * Previously a dead stub returning hardcoded `{state: "ready"}`.
- * Now it:
- *   1. Detects WebGPU availability
- *   2. Subscribes to engine state changes
- *   3. Auto-loads/unloads models when `loadedModel` setting changes
- *   4. Exposes real progress, state, and error information
+ * In Tauri mode: this hook is effectively a no-op for WebGPU detection.
+ * The OllamaAdapter handles model loading via Tauri commands, not this
+ * hook. We skip the isWebGPUAvailable() call entirely because:
+ *   1. WebGPU in Tauri's WebView2/WKWebView is unreliable
+ *   2. The requestAdapter() call can hang even with a timeout
+ *   3. Ollama is the primary engine in Tauri — WebLLM is not used
+ *
+ * In PWA mode (browser): this hook detects WebGPU and manages the
+ * WebLLM engine lifecycle as before.
  */
 export function useWebLLM() {
   const [webgpuInfo, setWebgpuInfo] = useState<WebGPUInfo>({
@@ -30,8 +34,16 @@ export function useWebLLM() {
 
   const loadedModel = useSettingsStore((s) => s.loadedModel);
 
-  // Detect WebGPU availability on mount
+  // Detect WebGPU availability on mount — ONLY in PWA mode
   useEffect(() => {
+    // In Tauri mode, skip WebGPU check entirely. Ollama is the primary
+    // engine; WebLLM is not used. This prevents the requestAdapter()
+    // hang that was blocking the UI on desktop.
+    if (isTauriEnvironment()) {
+      setWebgpuInfo({ state: "unavailable" });
+      return;
+    }
+
     isWebGPUAvailable().then((available) => {
       if (!available) {
         setWebgpuInfo({ state: "unavailable" });
@@ -81,7 +93,11 @@ export function useWebLLM() {
   }, []);
 
   // Auto-load/unload model when loadedModel setting changes
+  // ONLY in PWA mode — in Tauri mode, the OllamaAdapter handles this
   useEffect(() => {
+    // In Tauri mode, skip WebLLM model loading entirely
+    if (isTauriEnvironment()) return;
+
     if (loadedModel) {
       // Only load if not already loaded with the same model
       if (!isModelLoaded()) {

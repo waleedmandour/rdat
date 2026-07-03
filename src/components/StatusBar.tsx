@@ -5,16 +5,20 @@ import {
   Wifi,
   WifiOff,
   RefreshCw,
-  Cpu
+  Cpu,
+  Server,
+  ServerCrash,
 } from "lucide-react";
-import { 
-  EngineMode, 
-  GTRStatus, 
-  WebGPUInfo, 
-  RAGState, 
-  LocalAgentState 
+import {
+  EngineMode,
+  GTRStatus,
+  WebGPUInfo,
+  RAGState,
+  LocalAgentState
 } from "../types";
 import { cn } from "../lib/utils";
+import { isTauriEnvironment } from "../lib/adapters/ollama-adapter";
+import { useSettingsStore } from "../stores/settings-store";
 
 interface StatusBarProps {
   engineMode: EngineMode;
@@ -48,6 +52,44 @@ export function StatusBar({
 }: StatusBarProps) {
   const { t, locale } = useLanguage();
   const isRTL = locale === "ar";
+  const isTauri = isTauriEnvironment();
+  const loadedModel = useSettingsStore((s) => s.loadedModel);
+
+  // Determine the engine status display.
+  // In Tauri mode: show Ollama status (based on whether a model is loaded).
+  // In PWA mode: show WebGPU status (from useWebLLM hook).
+  const renderEngineStatus = () => {
+    if (isTauri) {
+      // Tauri mode — show Ollama engine status
+      if (loadedModel) {
+        return (
+          <span className="flex items-center gap-1 text-emerald-500">
+            <Server className="w-3.5 h-3.5" />
+            <span>{locale === "en" ? `Ollama: ${loadedModel}` : `Ollama: ${loadedModel}`}</span>
+          </span>
+        );
+      }
+      return (
+        <span className="flex items-center gap-1 text-amber-500">
+          <ServerCrash className="w-3.5 h-3.5" />
+          <span>{locale === "en" ? "Ollama: not loaded" : "Ollama: غير محمّل"}</span>
+        </span>
+      );
+    }
+
+    // PWA mode — show WebGPU status (existing behavior)
+    return (
+      <span>
+        {webgpuInfo.state === "ready"
+          ? t("status.webgpu.ready")
+          : webgpuInfo.state === "initializing"
+            ? (locale === "en" ? `Loading ${webgpuInfo.progress || 0}%` : `جاري التحميل ${webgpuInfo.progress || 0}%`)
+            : webgpuInfo.state === "error"
+              ? (locale === "en" ? `WebGPU: ${webgpuInfo.error || "Error"}` : `WebGPU: ${webgpuInfo.error || "خطأ"}`)
+              : t("status.webgpu.unavailable")}
+      </span>
+    );
+  };
 
   return (
     <footer className="h-9 bg-surface border-t border-border flex items-center justify-between px-4 text-[11px] text-muted-foreground font-mono select-none">
@@ -109,18 +151,16 @@ export function StatusBar({
 
         <div className="h-3.5 w-px bg-border whitespace-nowrap" />
 
-        {/* Local WebGPU Info */}
+        {/* Engine status — adapter-aware (Ollama in Tauri, WebGPU in PWA) */}
         <div className="flex items-center gap-1">
-          <Cpu className="w-3.5 h-3.5 text-muted-foreground" />
-          <span>
-            {webgpuInfo.state === "ready"
-              ? t("status.webgpu.ready")
-              : webgpuInfo.state === "initializing"
-                ? (locale === "en" ? `Loading ${webgpuInfo.progress || 0}%` : `جاري التحميل ${webgpuInfo.progress || 0}%`)
-                : webgpuInfo.state === "error"
-                  ? (locale === "en" ? `WebGPU: ${webgpuInfo.error || "Error"}` : `WebGPU: ${webgpuInfo.error || "خطأ"}`)
-                  : t("status.webgpu.unavailable")}
-          </span>
+          {isTauri ? (
+            renderEngineStatus()
+          ) : (
+            <>
+              <Cpu className="w-3.5 h-3.5 text-muted-foreground" />
+              {renderEngineStatus()}
+            </>
+          )}
         </div>
       </div>
     </footer>

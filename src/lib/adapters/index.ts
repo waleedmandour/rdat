@@ -9,8 +9,10 @@
  *       WebGPU browser dependency)
  *
  *   2. Else if WebGPU is available in the browser → WebLLMAdapter
- *      (Used in PWA mode, and as a fallback in Tauri when Ollama is
- *       not installed)
+ *      (Used in PWA mode only. SKIPPED in Tauri mode because WebGPU
+ *       in Tauri's WebView2/WKWebView is unreliable and the check
+ *       itself can hang even with a timeout — the user should install
+ *       Ollama instead.)
  *
  *   3. Else → null
  *      (No local adapter available; only Gemini cloud fallback will work.
@@ -20,11 +22,6 @@
  * The active adapter is memoized — once selected, the same instance is
  * returned for the lifetime of the page. Callers should NOT cache the
  * adapter themselves; always go through `getActiveAdapter()`.
- *
- * CRITICAL: Every availability check is wrapped in a timeout. If a
- * check hangs (e.g. Tauri IPC stalls, or navigator.gpu.requestAdapter()
- * never resolves in a webview), we fall through to the next adapter
- * instead of hanging forever on "Detecting engine...".
  */
 
 import type { LLMAdapter } from "../llm-adapter";
@@ -36,8 +33,7 @@ let selectionPromise: Promise<LLMAdapter | null> | null = null;
 
 /**
  * Wrap a promise with a timeout. If the promise doesn't resolve within
- * `ms` milliseconds, return `fallback` instead. This prevents the adapter
- * factory from hanging indefinitely if a backend check stalls.
+ * `ms` milliseconds, return `fallback` instead.
  */
 function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
   return Promise.race([
@@ -59,9 +55,8 @@ export async function getActiveAdapter(): Promise<LLMAdapter | null> {
   selectionPromise = (async () => {
     // ── Step 1: Try Ollama (only inside Tauri) ──
     // 3-second timeout — the Rust health check has a 2s timeout internally,
-    // but Tauri IPC can add overhead. 3s is generous enough for slow machines
-    // but short enough that the user doesn't stare at "Detecting engine..."
-    // for 30 seconds.
+    // plus Tauri IPC overhead. 3s is generous but short enough to not
+    // block the UI for long.
     if (isTauriEnvironment()) {
       try {
         const ollama = new OllamaAdapter();
@@ -71,20 +66,27 @@ export async function getActiveAdapter(): Promise<LLMAdapter | null> {
           activeAdapter = ollama;
           return activeAdapter;
         }
-        console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable. Falling back to WebLLM.");
+        console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable.");
+        // In Tauri mode, DO NOT fall through to WebLLM. WebGPU in Tauri's
+        // WebView2/WKWebView is unreliable and the user should install
+        // Ollama instead. Return null immediately — the AiModelsView will
+        // show the "Install Ollama" warning.
+        console.log("[AdapterFactory] Skipping WebLLM check in Tauri mode. Returning null.");
+        activeAdapter = null;
+        return activeAdapter;
       } catch (e) {
-        console.warn("[AdapterFactory] Ollama check failed, falling back to WebLLM:", e);
+        console.warn("[AdapterFactory] Ollama check failed:", e);
+        activeAdapter = null;
+        return activeAdapter;
       }
     }
 
-    // ── Step 2: Try WebLLM (browser with WebGPU, or Tauri fallback) ──
-    // 5-second timeout — navigator.gpu.requestAdapter() can hang indefinitely
-    // in some webviews (especially Tauri's WKWebView on macOS and WebView2
-    // on Windows when WebGPU is not supported). 5s is enough for a real
-    // WebGPU adapter to be found, and short enough to not block the UI.
+    // ── Step 2: Try WebLLM (PWA/browser mode only) ──
+    // 3-second timeout — isWebGPUAvailable() already has a 2s internal
+    // timeout on requestAdapter(), so 3s is enough margin.
     try {
       const webllm = new WebLLMAdapter();
-      const available = await withTimeout(webllm.isAvailable(), 5000, false);
+      const available = await withTimeout(webllm.isAvailable(), 3000, false);
       if (available) {
         console.log("[AdapterFactory] Selected WebLLMAdapter (WebGPU available).");
         activeAdapter = webllm;
@@ -107,9 +109,6 @@ export async function getActiveAdapter(): Promise<LLMAdapter | null> {
  * Synchronously get the active adapter if it has already been resolved.
  * Returns null if `getActiveAdapter()` has not been called yet, or if
  * it resolved to null.
- *
- * Useful in hot paths (e.g. inside a useEffect) where you don't want
- * to re-trigger the async selection.
  */
 export function getActiveAdapterSync(): LLMAdapter | null {
   return activeAdapter;

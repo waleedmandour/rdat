@@ -4,6 +4,7 @@ import { BookOpen, Languages, Sparkles, Command, Github, Mail, Key, Cpu, Cloud, 
 import { RdatLogo } from "./RdatLogo";
 import { useSettingsStore } from "../stores/settings-store";
 import { isWebGPUAvailable } from "../lib/local-llm-engine";
+import { isTauriEnvironment } from "../lib/adapters/ollama-adapter";
 
 interface WelcomeTabProps {
   onStart: () => void;
@@ -205,6 +206,13 @@ function SetupChecklist() {
   const [webgpuAvailable, setWebgpuAvailable] = React.useState<boolean | null>(null);
 
   React.useEffect(() => {
+    // In Tauri mode, skip the WebGPU check — Ollama is the primary
+    // engine, and navigator.gpu.requestAdapter() can hang in Tauri's
+    // webview. Set to false immediately so the checklist doesn't wait.
+    if (isTauriEnvironment()) {
+      setWebgpuAvailable(false);
+      return;
+    }
     isWebGPUAvailable().then(setWebgpuAvailable);
   }, []);
 

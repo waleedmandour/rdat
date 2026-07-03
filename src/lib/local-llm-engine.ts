@@ -507,11 +507,25 @@ export async function removeModelCache(rdatModelId: string): Promise<void> {
 /**
  * Check WebGPU availability in the current browser.
  * Returns true if WebGPU is available, false otherwise.
+ *
+ * CRITICAL: This function has a 2-second timeout. In Tauri's WebView2
+ * (Windows) and WKWebView (macOS), navigator.gpu.requestAdapter() can
+ * hang for 10-30 seconds or indefinitely when WebGPU is not properly
+ * supported. Without a timeout, this blocks the entire UI — the
+ * "Detecting engine..." spinner, the WelcomeTab checklist, and the
+ * useWebLLM hook all call this function on startup.
+ *
+ * The timeout is applied at the source so ALL callers are protected.
  */
 export async function isWebGPUAvailable(): Promise<boolean> {
   if (!("gpu" in navigator)) return false;
   try {
-    const adapter = await (navigator as any).gpu.requestAdapter();
+    // Race requestAdapter() against a 2-second timeout.
+    // If it doesn't resolve in 2s, assume WebGPU is unavailable.
+    const adapter = await Promise.race([
+      (navigator as any).gpu.requestAdapter(),
+      new Promise<null>((resolve) => setTimeout(() => resolve(null), 2000)),
+    ]);
     return adapter !== null;
   } catch {
     return false;
