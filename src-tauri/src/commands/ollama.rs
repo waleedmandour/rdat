@@ -18,10 +18,15 @@ use std::time::Duration;
 use tauri::{AppHandle, Emitter};
 
 /// Base URL of the local Ollama daemon. Configurable via OLLAMA_HOST
-/// env var (which Ollama itself respects); we fall back to localhost.
+/// env var (which Ollama itself respects); we fall back to 127.0.0.1.
+///
+/// IMPORTANT: We use 127.0.0.1 (IPv4 explicit) instead of "localhost"
+/// because on Windows, "localhost" can resolve to ::1 (IPv6) first,
+/// and Ollama by default only listens on IPv4 127.0.0.1. This causes
+/// connection refused errors even when Ollama is running.
 fn ollama_base_url() -> String {
     std::env::var("OLLAMA_HOST")
-        .unwrap_or_else(|_| "http://localhost:11434".to_string())
+        .unwrap_or_else(|_| "http://127.0.0.1:11434".to_string())
 }
 
 /// Build a reqwest client with a generous timeout for inference calls
@@ -78,34 +83,49 @@ struct OllamaGenerateResponse {
 
 // ─── Command: ollama_health ───────────────────────────────────────
 
-/// Check if the Ollama daemon is reachable on localhost:11434.
+/// Check if the Ollama daemon is reachable.
 ///
-/// Returns `true` if the daemon responds to a `/api/tags` request
-/// within 2 seconds. Returns `false` (NOT an error) if the daemon is
-/// unreachable — this lets the JS adapter fall back to WebLLM
-/// gracefully without surfacing a Tauri error dialog.
+/// Tries multiple URL variants to handle common Windows issues:
+///   1. The OLLAMA_HOST env var (if set)
+///   2. http://127.0.0.1:11434 (IPv4 explicit — most reliable on Windows)
+///   3. http://localhost:11434 (fallback for non-standard configs)
+///
+/// Returns `true` if ANY variant responds with HTTP 200 on /api/tags
+/// within 5 seconds. Returns `false` (NOT an error) if all variants
+/// fail — this lets the JS adapter fall back gracefully.
 #[tauri::command]
 pub async fn ollama_health() -> Result<bool, String> {
-    let url = format!("{}/api/tags", ollama_base_url());
+    let urls = vec![
+        format!("{}/api/tags", ollama_base_url()),
+        "http://127.0.0.1:11434/api/tags".to_string(),
+        "http://localhost:11434/api/tags".to_string(),
+    ];
+
     let client = reqwest::Client::builder()
-        .timeout(Duration::from_secs(2))
+        .timeout(Duration::from_secs(5))
         .build()
         .map_err(|e| e.to_string())?;
 
-    match client.get(&url).send().await {
-        Ok(resp) if resp.status().is_success() => Ok(true),
-        Ok(resp) => {
-            // Got a response but not 200 — daemon is running but in a
-            // weird state. Treat as unavailable.
-            eprintln!("[ollama_health] daemon returned status {}", resp.status());
-            Ok(false)
-        }
-        Err(e) => {
-            // Connection refused / timeout — daemon not running.
-            eprintln!("[ollama_health] daemon unreachable: {}", e);
-            Ok(false)
+    for url in &urls {
+        eprintln!("[ollama_health] Trying: {}", url);
+        match client.get(url).send().await {
+            Ok(resp) if resp.status().is_success() => {
+                eprintln!("[ollama_health] Success via: {}", url);
+                return Ok(true);
+            }
+            Ok(resp) => {
+                eprintln!("[ollama_health] {} returned status {}", url, resp.status());
+                // Try next URL — daemon might be on a different address
+            }
+            Err(e) => {
+                eprintln!("[ollama_health] {} failed: {}", url, e);
+                // Try next URL
+            }
         }
     }
+
+    eprintln!("[ollama_health] All URL variants failed — Ollama not detected.");
+    Ok(false)
 }
 
 // ─── Command: ollama_list_models ──────────────────────────────────

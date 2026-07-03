@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useSettingsStore } from "../stores/settings-store";
 import { useToast } from "../context/ToastContext";
-import { useUIStore } from "../stores/ui-store";
 import {
   Cpu,
   Download,
@@ -19,7 +18,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { getActiveAdapter, isTauriEnvironment } from "../lib/adapters";
+import { getActiveAdapter, resetAdapter, isTauriEnvironment } from "../lib/adapters";
 import type { LLMAdapter, ModelInfo } from "../lib/llm-adapter";
 
 /**
@@ -51,7 +50,6 @@ export function AiModelsView() {
   const { locale, t } = useLanguage();
   const { showToast } = useToast();
   const isRTL = locale === "ar";
-  const requestNav = useUIStore((s) => s.requestNav);
 
   const {
     engineMode,
@@ -164,17 +162,31 @@ export function AiModelsView() {
   }, []);
 
   // ─── Refresh model list ──────────────────────────────────────────
+  // Also used as the "Recheck" button handler when no adapter is detected.
+  // Resets the adapter cache and re-runs full detection so that if the
+  // user just started Ollama, we pick it up without requiring an app restart.
   const refreshModels = useCallback(async () => {
-    if (!adapter) return;
-    try {
-      const modelList = await adapter.listModels();
-      setModels(modelList);
-      const healthy = await adapter.isAvailable();
-      setDaemonHealthy(healthy);
-    } catch (e: any) {
-      console.warn("[AiModelsView] Refresh failed:", e);
+    // Reset the adapter cache so getActiveAdapter() re-detects from scratch
+    resetAdapter();
+    setAdapterLoading(true);
+    setAdapter(null);
+    setDaemonHealthy(false);
+
+    const activeAdapter = await getActiveAdapter();
+    setAdapter(activeAdapter);
+
+    if (activeAdapter) {
+      try {
+        const modelList = await activeAdapter.listModels();
+        setModels(modelList);
+        const healthy = await activeAdapter.isAvailable();
+        setDaemonHealthy(healthy);
+      } catch (e: any) {
+        console.warn("[AiModelsView] Refresh failed:", e);
+      }
     }
-  }, [adapter]);
+    setAdapterLoading(false);
+  }, []);
 
   // ─── Pull / Download a model ─────────────────────────────────────
   const handlePullModel = async (modelId: string) => {
@@ -326,7 +338,6 @@ export function AiModelsView() {
           loadedModel={loadedModel}
           isRTL={isRTL}
           onRefresh={refreshModels}
-          onGoToOnboarding={() => requestNav("models")}
         />
 
         {/* Hardware Profile (compact) */}
@@ -463,7 +474,6 @@ function EngineStatusBanner({
   loadedModel,
   isRTL,
   onRefresh,
-  onGoToOnboarding,
 }: {
   adapter: LLMAdapter | null;
   daemonHealthy: boolean;
@@ -472,7 +482,6 @@ function EngineStatusBanner({
   loadedModel: string;
   isRTL: boolean;
   onRefresh: () => void;
-  onGoToOnboarding: () => void;
 }) {
   if (!adapter) {
     return (
@@ -487,12 +496,29 @@ function EngineStatusBanner({
               ? "لم يتم اكتشاف Ollama أو WebGPU. التطبيق سيعمل في وضع محدود (LTE فقط)."
               : "Neither Ollama nor WebGPU detected. App will run in degraded mode (LTE only)."}
           </div>
-          <button
-            onClick={onGoToOnboarding}
-            className="mt-2 text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer"
-          >
-            {isRTL ? "عرض إرشادات التثبيت ←" : "View setup instructions →"}
-          </button>
+          <div className="flex items-center gap-3 mt-2">
+            {/* Recheck button — re-runs adapter detection in case Ollama
+                was just started after the app launched. */}
+            <button
+              onClick={onRefresh}
+              className="text-[10px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <RefreshCw className="w-3 h-3" />
+              {isRTL ? "إعادة التحقق" : "Recheck"}
+            </button>
+            <span className="text-muted-foreground/30">|</span>
+            {/* Download Ollama button — opens ollama.com/download */}
+            <a
+              href="https://ollama.com/download"
+              target="_blank"
+              rel="noreferrer"
+              className="text-[10px] font-bold text-amber-600 dark:text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
+            >
+              <Download className="w-3 h-3" />
+              {isRTL ? "تحميل Ollama" : "Download Ollama"}
+              <ExternalLink className="w-2.5 h-2.5" />
+            </a>
+          </div>
         </div>
       </div>
     );
