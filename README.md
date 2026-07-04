@@ -1,4 +1,4 @@
-# RDAT Copilot
+# RDAT: Translation Copilot
 
 **Professional English-to-Arabic Computer-Assisted Translation (CAT) Environment**
 
@@ -338,14 +338,27 @@ RDAT Copilot supports full bilingual UI (English/Arabic) with automatic RTL layo
 
 ---
 
+## Documentation
+
+A comprehensive user guide is available as a PDF in the `docs/` directory:
+
+- **[RDAT: Translation Copilot v0.2.0 User Guide (PDF)](docs/RDAT-Translation-Copilot-v0.2.0-User-Guide.pdf)** (6 pages, covers installation, translation workflow, tier system, troubleshooting, and more)
+- [HTML source](docs/RDAT-Translation-Copilot-v0.2.0-User-Guide.html) (editable)
+
+The guide is also attached as a downloadable asset on the [v0.2.0 release page](https://github.com/waleedmandour/rdat/releases/tag/v0.2.0).
+
+For architectural details, adapter patterns, and migration notes, see [TAURI-MIGRATION.md](TAURI-MIGRATION.md).
+
+---
+
 ## Roadmap
 
-- **Continuous-assistance multi-trigger system** — Idle-pause re-engagement, post-accept re-suggestion, and post-dismissal cooldown to provide Google-style autocomplete that persists during translator thinking pauses (2–3 s).
-- **Streaming inference** — Streaming token generation for both Ollama and WebLLM to reduce time-to-first-token below 800 ms.
-- **Context window expansion** — Pass previous/next segment source to the LLM for terminological consistency across segments.
-- **Arabic-to-English (AR→EN) translation direction** — Currently unidirectional (EN→AR).
-- **CI matrix for cross-platform builds** — GitHub Actions for Windows, macOS, and Linux installer production.
-- **Updater signing** — Generate a Tauri updater keypair and host signed manifests on GitHub Releases.
+- **Continuous-assistance multi-trigger system**: Idle-pause re-engagement, post-accept re-suggestion, and post-dismissal cooldown to provide Google-style autocomplete that persists during translator thinking pauses (2 to 3 seconds).
+- **Streaming inference**: Streaming token generation for both Ollama and WebLLM to reduce time-to-first-token below 800 ms.
+- **Context window expansion**: Pass previous/next segment source to the LLM for terminological consistency across segments.
+- **Arabic-to-English (AR to EN) translation direction**: Currently unidirectional (EN to AR).
+- **CI matrix for cross-platform builds**: GitHub Actions for Windows, macOS, and Linux installer production.
+- **Updater signing**: Generate a Tauri updater keypair and host signed manifests on GitHub Releases.
 
 ---
 
@@ -362,11 +375,11 @@ Copyright (c) 2026 Dr. Waleed Mandour
 
 ## Acknowledgements
 
-**Developed by Dr. Waleed Abu Mandour**, Assistant Professor at Sultan Qaboos University, Oman.
+**Developed by Dr. Waleed Mandour**, Assistant Professor at Sultan Qaboos University, Oman.
 
 This tool supports academic researchers and professional translators working with English-Arabic bilingual corpora.
 
 - Email: [w.abumandour@squ.edu.om](mailto:w.abumandour@squ.edu.om)
 - Repository: [github.com/waleedmandour/rdat](https://github.com/waleedmandour/rdat)
 
-The development of RDAT Copilot has been performed with the assistance of multi-AI agents, including **GLM-5.1** (2026). These AI-assisted development tools were used for code generation, architectural analysis, debugging, and documentation throughout the project lifecycle.
+The development of RDAT: Translation Copilot has been performed with the assistance of multi-AI agents. The primary AI assistant used throughout the development lifecycle was **GLM 5.2** (2026) by Z.ai, which was used for code generation, architectural analysis, debugging, documentation, and visual design. Additional AI agents were consulted for code review, research synthesis, and cross-platform testing guidance.
