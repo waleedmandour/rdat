@@ -60,11 +60,11 @@ struct OllamaTagsModel {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct TranslateRequest {
     pub model: String,
     pub system_prompt: String,
     pub user_prompt: String,
-    #[serde(rename = "maxTokens")]
     pub max_tokens: u32,
     pub temperature: f32,
 }
