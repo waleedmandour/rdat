@@ -14,7 +14,7 @@ export const translations = {
       settings: "Settings",
     },
     sidebar: {
-      copilot: "Copilot",
+      copilot: "RDAT Translation Copilot",
       expand: "Expand sidebar",
       collapse: "Collapse sidebar",
     },
@@ -36,7 +36,7 @@ export const translations = {
       segments: "Segments",
       words: "Words",
       ready: "Ready",
-      footer: `RDAT Copilot v${APP_VERSION} | EN→AR`,
+      footer: `RDAT: Translation Copilot v${APP_VERSION} | EN-AR`,
     },
     workspace: {
       title: {
@@ -96,7 +96,7 @@ export const translations = {
       settings: "الإعدادات",
     },
     sidebar: {
-      copilot: "المساعد",
+      copilot: "RDAT مساعد الترجمة",
       expand: "توسيع الشريط الجانبي",
       collapse: "طي الشريط الجانبي",
     },
@@ -118,7 +118,7 @@ export const translations = {
       segments: "المقاطع",
       words: "الكلمات",
       ready: "جاهز",
-      footer: `مساعد RDAT ${APP_VERSION} | إنكليزي ↔ عربي`,
+      footer: `RDAT: مساعد الترجمة ${APP_VERSION} | إنكليزي-عربي`,
     },
     workspace: {
       title: {

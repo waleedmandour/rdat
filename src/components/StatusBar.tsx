@@ -8,6 +8,8 @@ import {
   Cpu,
   Server,
   ServerCrash,
+  Loader2,
+  PenLine,
 } from "lucide-react";
 import {
   EngineMode,
@@ -19,6 +21,7 @@ import {
 import { cn } from "../lib/utils";
 import { isTauriEnvironment } from "../lib/adapters/ollama-adapter";
 import { useSettingsStore } from "../stores/settings-store";
+import { useEditorActivityStore } from "../stores/editor-activity-store";
 
 interface StatusBarProps {
   engineMode: EngineMode;
@@ -54,25 +57,60 @@ export function StatusBar({
   const isRTL = locale === "ar";
   const isTauri = isTauriEnvironment();
   const loadedModel = useSettingsStore((s) => s.loadedModel);
+  const editorActivity = useEditorActivityStore((s) => s.activity);
+
+  // Activity indicator for the status bar
+  const renderActivityIndicator = () => {
+    switch (editorActivity) {
+      case "typing":
+        return (
+          <span className="flex items-center gap-1 text-blue-400">
+            <PenLine className="w-3.5 h-3.5" />
+            <span>{isRTL ? "يكتب..." : "Typing..."}</span>
+          </span>
+        );
+      case "suggesting":
+        return (
+          <span className="flex items-center gap-1 text-primary">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>{isRTL ? "يقترح..." : "Suggesting..."}</span>
+          </span>
+        );
+      case "loading-model":
+        return (
+          <span className="flex items-center gap-1 text-amber-400">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" />
+            <span>{isRTL ? "تحميل النموذج..." : "Loading model..."}</span>
+          </span>
+        );
+      default:
+        return (
+          <span className="flex items-center gap-1 text-muted-foreground">
+            <span>{isRTL ? "جاهز" : "Ready"}</span>
+          </span>
+        );
+    }
+  };
 
   // Determine the engine status display.
   // In Tauri mode: show Ollama status (based on whether a model is loaded).
   // In PWA mode: show WebGPU status (from useWebLLM hook).
   const renderEngineStatus = () => {
     if (isTauri) {
-      // Tauri mode — show Ollama engine status
+      // Tauri mode - show Ollama engine status
       if (loadedModel) {
         return (
           <span className="flex items-center gap-1 text-emerald-500">
             <Server className="w-3.5 h-3.5" />
-            <span>{locale === "en" ? `Ollama: ${loadedModel}` : `Ollama: ${loadedModel}`}</span>
+            <span>{`Ollama: ${loadedModel}`}</span>
           </span>
         );
       }
+      // Ollama detected but no model loaded - guide user to Models panel
       return (
         <span className="flex items-center gap-1 text-amber-500">
           <ServerCrash className="w-3.5 h-3.5" />
-          <span>{locale === "en" ? "Ollama: not loaded" : "Ollama: غير محمّل"}</span>
+          <span>{locale === "en" ? "Ollama: no model loaded (go to Models)" : "Ollama: لا يوجد نموذج (اذهب للنماذج)"}</span>
         </span>
       );
     }
@@ -93,12 +131,17 @@ export function StatusBar({
 
   return (
     <footer className="h-9 bg-surface border-t border-border flex items-center justify-between px-4 text-[11px] text-muted-foreground font-mono select-none">
-      {/* Left items (Status and Offline info) */}
+      {/* Left items (Status, Activity, and Offline info) */}
       <div className="flex items-center gap-4">
         <div className="flex items-center gap-1.5">
           <Database className="w-3.5 h-3.5 text-primary" />
           <span>{t("status.footer")}</span>
         </div>
+
+        <div className="h-3.5 w-px bg-border" />
+
+        {/* Editor activity indicator */}
+        {renderActivityIndicator()}
 
         <div className="h-3.5 w-px bg-border" />
 

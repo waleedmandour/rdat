@@ -14,6 +14,7 @@ import type { LLMAdapter } from "../../lib/llm-adapter";
 import { useGemini } from "../../hooks/useGemini";
 import { useSettingsStore } from "../../stores/settings-store";
 import { useUIStore } from "../../stores/ui-store";
+import { useEditorActivityStore } from "../../stores/editor-activity-store";
 import { useToast } from "../../context/ToastContext";
 import {
   Sparkles,
@@ -96,6 +97,7 @@ export function TargetEditor({
   const { engineMode, useCloudFallback, loadedModel } = useSettingsStore();
   const { showToast } = useToast();
   const requestNav = useUIStore((s) => s.requestNav);
+  const setEditorActivity = useEditorActivityStore((s) => s.setActivity);
 
   const [ghostSuggestion, setGhostSuggestion] = useState<string>("");
   const [suggestionCandidates, setSuggestionCandidates] = useState<string[]>([]);
@@ -118,12 +120,14 @@ export function TargetEditor({
 
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const idleTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latestFetchId = useRef(0);
 
   const justAcceptedRef = useRef(false);
   const hasPrefetchedRef = useRef(false);
   const lastSuggestionTextRef = useRef<string>("");
   const DEVIATION_THRESHOLD = 0.6;
+  const IDLE_PAUSE_MS = 2000; // Re-engage suggestions after 2s pause
 
   // Per-session toast dedup — prevents spamming the same error toast
   // on every keystroke / segment switch. Keys are error-class strings
@@ -383,7 +387,14 @@ export function TargetEditor({
     lastSuggestionTextRef.current = "";
   }, [sourceText, generateBurst]);
 
-  // ─── Prefetch on segment focus ───
+  // ─── Prefetch on segment focus + typing debounce + idle-pause re-engagement ───
+  // Three trigger mechanisms:
+  //   1. Segment focus: immediate prefetch + fetch
+  //   2. Typing debounce: 400ms after last keystroke
+  //   3. Idle pause: 2s after typing debounce fires, re-engage to provide
+  //      "continuous assistance" during translator thinking pauses.
+  //      This is the key differentiator: the system doesn't give up after
+  //      one suggestion. It keeps trying while the translator pauses.
   useEffect(() => {
     if (!isActive) {
       hasPrefetchedRef.current = false;
@@ -391,14 +402,15 @@ export function TargetEditor({
       setSuggestionCandidates([]);
       setCandidateIndex(0);
       setTierSource(null);
-      // Don't clear tierError here — we want it to persist across segment
-      // switches so the inline hint stays visible. It gets cleared on
-      // successful fetch or on explicit user action.
       justAcceptedRef.current = false;
       lastSuggestionTextRef.current = "";
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
         debounceRef.current = null;
+      }
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
+        idleTimerRef.current = null;
       }
       return;
     }
@@ -428,17 +440,34 @@ export function TargetEditor({
       }
     }
 
-    if (debounceRef.current) {
-      clearTimeout(debounceRef.current);
-    }
+    // Clear any existing timers
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
 
+    // Timer 1: typing debounce (400ms) - fires shortly after typing stops
+    setEditorActivity("typing");
     debounceRef.current = setTimeout(() => {
+      setEditorActivity("suggesting");
       fetchSuggestions(translationText);
+
+      // Timer 2: idle-pause re-engagement (2s after debounce)
+      // If the user hasn't typed anything for 2 seconds after the initial
+      // suggestion, re-trigger to provide a fresh/updated suggestion.
+      // This handles the "translator pauses to think" scenario.
+      idleTimerRef.current = setTimeout(() => {
+        // Only re-engage if the segment is still active and user hasn't typed
+        if (isActive && translationText.trim()) {
+          fetchSuggestions(translationText);
+        }
+      }, IDLE_PAUSE_MS);
     }, 400);
 
     return () => {
       if (debounceRef.current) {
         clearTimeout(debounceRef.current);
+      }
+      if (idleTimerRef.current) {
+        clearTimeout(idleTimerRef.current);
       }
     };
   }, [isActive, translationText, fetchSuggestions, sourceText]);

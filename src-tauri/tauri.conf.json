@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "RDAT Copilot — English-Arabic CAT Assistant",
+        "title": "RDAT: Translation Copilot - English-Arabic CAT Assistant",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,

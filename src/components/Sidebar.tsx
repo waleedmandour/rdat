@@ -49,11 +49,11 @@ export function Sidebar({
     >
       <div className="flex flex-col gap-4">
         {/* Logo Header */}
-        <div className="h-14 border-b border-border flex items-center px-4 justify-between">
+        <div className="h-14 border-b border-border flex items-center px-3 justify-between">
           {!collapsed && (
-            <div className="flex items-center gap-2.5 font-bold text-base text-primary">
-              <RdatLogo size={28} className="shrink-0" />
-              <span>{t("sidebar.copilot")}</span>
+            <div className="flex items-center gap-2 font-bold text-xs text-primary leading-tight">
+              <RdatLogo size={26} className="shrink-0" />
+              <span className="truncate">{t("sidebar.copilot")}</span>
             </div>
           )}
           {collapsed && <RdatLogo size={24} className="mx-auto" />}

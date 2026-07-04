@@ -81,21 +81,67 @@ export function SourceEditor({
     }
   };
 
-  const handleFile = (file: File) => {
-    if (file.type !== "text/plain" && !file.name.endsWith(".txt")) {
-      showToast(isRTL ? "برجاء إرفاق ملف نصي (.txt) فقط!" : "Only text files (.txt) are supported!", "error");
+  const handleFile = async (file: File) => {
+    const fileName = file.name.toLowerCase();
+
+    // .txt files: read as text directly
+    if (file.type === "text/plain" || fileName.endsWith(".txt")) {
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target?.result as string;
+        if (text) {
+          setImportText(text);
+          showToast(isRTL ? "تم تحميل الملف بنجاح!" : "File loaded successfully! Review below:", "success");
+        }
+      };
+      reader.readAsText(file);
       return;
     }
 
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      const text = e.target?.result as string;
-      if (text) {
-        setImportText(text);
-        showToast(isRTL ? "تم تحميل الملف بنجاح!" : "File loaded successfully! Review below:", "success");
+    // .docx files: use mammoth to extract text
+    if (fileName.endsWith(".docx")) {
+      try {
+        const arrayBuffer = await file.arrayBuffer();
+        const mammoth = await import("mammoth");
+        const result = await mammoth.extractRawText({ arrayBuffer });
+        if (result.value && result.value.trim()) {
+          setImportText(result.value);
+          showToast(
+            isRTL ? "تم استخراج النص من ملف Word بنجاح!" : "Text extracted from Word document successfully!",
+            "success"
+          );
+        } else {
+          showToast(
+            isRTL ? "الملف فارغ أو لا يحتوي على نص" : "The document is empty or contains no extractable text",
+            "warning"
+          );
+        }
+      } catch (err: any) {
+        console.error("[SourceEditor] DOCX import failed:", err);
+        showToast(
+          isRTL ? `فشل قراءة ملف Word: ${err.message}` : `Failed to read Word document: ${err.message}`,
+          "error"
+        );
       }
-    };
-    reader.readAsText(file);
+      return;
+    }
+
+    // .doc files (old binary format) - not supported in browser
+    if (fileName.endsWith(".doc")) {
+      showToast(
+        isRTL
+          ? "صيغة .doc القديمة غير مدعومة. يرجى تحويل الملف إلى .docx أو .txt"
+          : "Legacy .doc format is not supported. Please convert the file to .docx or .txt",
+        "warning"
+      );
+      return;
+    }
+
+    // Any other file type
+    showToast(
+      isRTL ? "صيغة الملف غير مدعومة. استخدم .txt أو .docx" : "Unsupported file format. Use .txt or .docx",
+      "error"
+    );
   };
 
   return (
@@ -149,11 +195,11 @@ export function SourceEditor({
                 if (files && files.length > 0) handleFile(files[0]);
               }}
               className="hidden"
-              accept=".txt"
+              accept=".txt,.docx,.doc"
             />
             <Upload className="w-6 h-6 mx-auto mb-1 text-slate-500" />
             <span className="text-[10px] font-bold block text-slate-400">
-              {isRTL ? "اسحب وأفلت ملف .txt هنا، أو اضغط للتصفح" : "Drag & drop a .txt file here, or click to browse"}
+              {isRTL ? "اسحب وأفلت ملف .txt أو .docx هنا، أو اضغط للتصفح" : "Drag & drop a .txt or .docx file here, or click to browse"}
             </span>
           </div>
 

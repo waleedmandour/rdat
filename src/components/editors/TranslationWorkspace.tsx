@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 import { useWorkspaceStore } from "../../stores/workspace-store";
+import type { TranslationDirection } from "../../stores/workspace-store";
 import { useDualStorage } from "../../hooks/useDualStorage";
 import { putToStore, getAllofStore } from "../../lib/dual-storage";
 import { SourceEditor } from "./SourceEditor";
@@ -41,7 +42,11 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     setCurrentSegmentIndex,
     highlightedSegmentIndex,
     setHighlightedSegmentIndex,
+    direction,
+    setDirection,
   } = useWorkspaceStore();
+
+  const isArToEn = direction === "ar-en";
 
   const { segmentCount, refreshCounts } = useDualStorage();
 
@@ -228,7 +233,13 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
   // Confirms a sentence translation and persists it to IndexedDB
   const handleConfirmSegment = async (idx: number) => {
     const text = targetTexts[idx] || "";
-    if (!text.trim()) return;
+    if (!text.trim()) {
+      showToast(
+        isRTL ? "لا يمكن حفظ مقطع فارغ. اكتب الترجمة أولاً." : "Cannot save an empty segment. Please write a translation first.",
+        "warning"
+      );
+      return;
+    }
 
     try {
       const newEntry: Omit<SegmentEntry, "id"> = {
@@ -245,6 +256,11 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       setConfirmedIndices((prev) => ({ ...prev, [idx]: true }));
       await refreshCounts();
 
+      showToast(
+        isRTL ? `تم حفظ المقطع ${idx + 1} بنجاح` : `Segment ${idx + 1} saved successfully`,
+        "success"
+      );
+
       // Automatically focus on next segment
       if (idx + 1 < sentences.length) {
         setCurrentSegmentIndex(idx + 1);
@@ -255,6 +271,10 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       }
     } catch (err) {
       console.error("[Workspace] Failed to confirm segment:", err);
+      showToast(
+        isRTL ? `فشل حفظ المقطع: ${err}` : `Failed to save segment: ${err}`,
+        "error"
+      );
     }
   };
 
@@ -336,9 +356,38 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
   }, [sidebarSearchTerm, glossaryEntries]);
 
   return (
-    <div className="h-full flex flex-col lg:flex-row bg-[#0A0B0E] overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
-      
-      {/* Left panel (English source reader) */}
+    <div className="h-full flex flex-col bg-[#0A0B0E] overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
+
+      {/* Direction Toggle Bar */}
+      <div className="h-9 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-center gap-2 px-4 select-none">
+        <button
+          onClick={() => setDirection("en-ar")}
+          className={cn(
+            "px-3 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer",
+            direction === "en-ar"
+              ? "bg-primary text-white"
+              : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+          )}
+        >
+          EN → AR
+        </button>
+        <button
+          onClick={() => setDirection("ar-en")}
+          className={cn(
+            "px-3 py-0.5 rounded-md text-[10px] font-bold transition-all cursor-pointer",
+            direction === "ar-en"
+              ? "bg-primary text-white"
+              : "text-muted-foreground hover:text-foreground hover:bg-surface-hover"
+          )}
+        >
+          AR → EN
+        </button>
+      </div>
+
+      {/* Main panels */}
+      <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
+
+      {/* Left panel (Source reader) */}
       <div className="flex-1 h-1/2 lg:h-full overflow-hidden">
         <SourceEditor
           sentences={sentences}
@@ -649,6 +698,8 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
         </div>
 
       </aside>
+
+      </div>{/* End main panels wrapper */}
 
     </div>
   );

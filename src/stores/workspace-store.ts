@@ -1,15 +1,19 @@
 import { create } from "zustand";
 
+export type TranslationDirection = "en-ar" | "ar-en";
+
 interface WorkspaceState {
   sourceText: string;
   targetTexts: string[];
   currentSegmentIndex: number;
   highlightedSegmentIndex: number | null;
+  direction: TranslationDirection;
   setSourceText: (text: string) => void;
   setTargetTexts: (textsOrUpdater: string[] | ((prev: string[]) => string[])) => void;
   setTargetTextAtIndex: (index: number, text: string) => void;
   setCurrentSegmentIndex: (index: number) => void;
   setHighlightedSegmentIndex: (index: number | null) => void;
+  setDirection: (direction: TranslationDirection) => void;
 }
 
 const DEFAULT_SOURCE = 
@@ -26,6 +30,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   targetTexts: Array(4).fill(""),
   currentSegmentIndex: 0,
   highlightedSegmentIndex: null,
+  direction: "en-ar",
 
   setSourceText: (sourceText) => set({ sourceText }),
   setTargetTexts: (textsOrUpdater) => set((state) => {
@@ -41,5 +46,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   }),
   setCurrentSegmentIndex: (currentSegmentIndex) => set({ currentSegmentIndex }),
   setHighlightedSegmentIndex: (highlightedSegmentIndex) => set({ highlightedSegmentIndex }),
+  setDirection: (direction) => set({ direction }),
 }));
 export default useWorkspaceStore;
