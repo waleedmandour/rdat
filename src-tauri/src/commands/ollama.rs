@@ -207,15 +207,22 @@ pub async fn ollama_health() -> Result<HealthResult, String> {
                 });
             }
             Err(e) => {
-                // Classify the error so the UI can show a useful message
+                // Classify the error so the UI can show a useful message.
+                // Note: reqwest doesn't expose is_dns_failure() directly;
+                // we check the error string for DNS-related keywords.
+                let error_str = e.to_string();
                 let msg = if e.is_connect() {
                     "Connection refused".to_string()
                 } else if e.is_timeout() {
                     "Timeout".to_string()
-                } else if e.is_dns_failure() {
+                } else if error_str.contains("dns")
+                    || error_str.contains("DNS")
+                    || error_str.contains("resolve")
+                    || error_str.contains("name resolution")
+                {
                     "DNS failure".to_string()
                 } else {
-                    e.to_string()
+                    error_str
                 };
                 eprintln!("[ollama_health] {} failed: {}", url, msg);
                 attempts.push(HealthAttempt {
