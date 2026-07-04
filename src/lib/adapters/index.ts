@@ -46,6 +46,12 @@ function withTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T
  * Detect and return the active LLM adapter for the current environment.
  * Memoized — the same instance is returned on subsequent calls.
  *
+ * In Tauri mode, if Ollama is not detected on the first attempt, we
+ * automatically retry once after a 3-second delay. This handles the
+ * cold-start race where Ollama is set to autostart at login but hasn't
+ * bound its HTTP listener yet when RDAT launches. Manual "Recheck"
+ * from the UI still works as before (via resetAdapter()).
+ *
  * @returns The active adapter, or null if no local adapter is available.
  */
 export async function getActiveAdapter(): Promise<LLMAdapter | null> {
@@ -54,23 +60,34 @@ export async function getActiveAdapter(): Promise<LLMAdapter | null> {
 
   selectionPromise = (async () => {
     // ── Step 1: Try Ollama (only inside Tauri) ──
-    // 3-second timeout — the Rust health check has a 2s timeout internally,
-    // plus Tauri IPC overhead. 3s is generous but short enough to not
-    // block the UI for long.
+    // 8-second timeout — the Rust health check tries 3 URLs with 5s
+    // each, plus Tauri IPC overhead. 8s is enough for one full attempt.
     if (isTauriEnvironment()) {
       try {
         const ollama = new OllamaAdapter();
-        const available = await withTimeout(ollama.isAvailable(), 3000, false);
+        let available = await withTimeout(ollama.isAvailable(), 8000, false);
+
+        // ── Auto-retry on initial launch ──
+        // If Ollama wasn't detected on the first attempt, wait 3s and
+        // retry once. This handles the cold-start race where Ollama is
+        // set to autostart at login but hasn't bound its HTTP listener
+        // yet when RDAT launches simultaneously.
+        if (!available) {
+          console.log("[AdapterFactory] Ollama not detected on first attempt. Retrying in 3s (cold-start race protection)...");
+          await new Promise(resolve => setTimeout(resolve, 3000));
+          available = await withTimeout(ollama.isAvailable(), 8000, false);
+        }
+
         if (available) {
           console.log("[AdapterFactory] Selected OllamaAdapter (Tauri + Ollama daemon).");
           activeAdapter = ollama;
           return activeAdapter;
         }
-        console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable.");
+        console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable after retry.");
         // In Tauri mode, DO NOT fall through to WebLLM. WebGPU in Tauri's
         // WebView2/WKWebView is unreliable and the user should install
         // Ollama instead. Return null immediately — the AiModelsView will
-        // show the "Install Ollama" warning.
+        // show the "Install Ollama" warning with diagnostics.
         console.log("[AdapterFactory] Skipping WebLLM check in Tauri mode. Returning null.");
         activeAdapter = null;
         return activeAdapter;

@@ -1,3 +1,9 @@
+// Version is read from package.json at build time so there's a single
+// source of truth. Vite replaces import.meta.env with the values at build.
+// We use a vite define in vite.config.ts to inject PACKAGE_VERSION.
+// Fallback to "0.2.0" for safety.
+const APP_VERSION = (typeof import.meta !== "undefined" && (import.meta as any).env?.VITE_APP_VERSION) || "0.2.0";
+
 export const translations = {
   en: {
     nav: {
@@ -30,7 +36,7 @@ export const translations = {
       segments: "Segments",
       words: "Words",
       ready: "Ready",
-      footer: "RDAT Copilot v0.2.0 | EN→AR",
+      footer: `RDAT Copilot v${APP_VERSION} | EN→AR`,
     },
     workspace: {
       title: {
@@ -112,7 +118,7 @@ export const translations = {
       segments: "المقاطع",
       words: "الكلمات",
       ready: "جاهز",
-      footer: "مساعد RDAT 0.2.0 | إنكليزي ↔ عربي",
+      footer: `مساعد RDAT ${APP_VERSION} | إنكليزي ↔ عربي`,
     },
     workspace: {
       title: {

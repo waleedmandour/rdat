@@ -190,57 +190,79 @@ Output per platform:
 
 ## What works vs. what's TODO
 
-### ✅ Working in this scaffold
+### ✅ Working in v0.2.0
 
 - **Adapter pattern wired into `TargetEditor`** — the active adapter
   (Ollama or WebLLM) is consulted first; legacy direct-call path retained
   as fallback for early-page-load when the async factory hasn't resolved.
 - **All five Ollama Tauri commands implemented in Rust:**
-  - `ollama_health` — quick reachability check (2s timeout)
+  - `ollama_health` — multi-URL health check with 5s timeout, `.no_proxy()`,
+    structured diagnostics returned to UI (which URLs tried, which errors)
   - `ollama_list_models` — merges installed models with recommended catalog
   - `ollama_pull_model` — streams progress events to webview
   - `ollama_remove_model` — deletes from daemon's store
   - `ollama_translate` — calls `/api/generate` with system+user prompt
+- **Gemini direct API call in Tauri mode** ✅ — Rust-side `gemini_translate`
+  command proxies to Gemini REST API via reqwest. `gemini-direct.ts`
+  dispatcher routes Tauri→Rust, PWA→Vercel functions.
+- **Ollama onboarding modal** ✅ — 3-step skippable guide with platform-
+  specific instructions and "Check Again" verification.
+- **Adapter-aware AiModelsView** ✅ — shows Ollama or WebLLM catalog based
+  on active adapter, with pull/load/remove and live progress bars.
+- **Engine status diagnostics in UI** ✅ — when Ollama is not detected, the
+  UI shows exactly which URLs were tried and which errors occurred, so a
+  screenshot is enough to diagnose the issue.
+- **Cold-start auto-retry** ✅ — on initial launch, if Ollama isn't detected
+  on the first attempt, the adapter factory waits 3s and retries once
+  before giving up. Handles Ollama autostart race.
+- **Proxy bypass** ✅ — all Ollama reqwest clients use `.no_proxy()` so
+  corporate VPNs/security software don't intercept loopback traffic.
+- **OLLAMA_HOST normalization** ✅ — handles bare `host:port`, full URLs,
+  and bare hosts without ports.
+- **Single-source version string** ✅ — `package.json` version is injected
+  via `vite.config.ts` `define` into `import.meta.env.VITE_APP_VERSION`,
+  consumed by i18n translations. No more hand-editing 4 files per release.
+- **Shell scope configured** ✅ — `tauri.conf.json` has `plugins.shell.open`
+  regex allowing `https://*` URLs for the "Download Ollama" button.
 - **Shared RAG prompt builder** — both adapters use the same
   `buildRAGSystemPrompt()` so glossary-context behavior is identical.
 - **PWA build still works** — dynamic imports of `@tauri-apps/api/*` are
   tree-shaken out of the PWA bundle because `isTauriEnvironment()` returns
   false at module-eval time.
 
-### ⚠️ TODO (out of scope for this scaffold)
+### ⚠️ TODO (future releases)
 
-1. **AiModelsView refactor** — currently the Models panel only knows about
-   WebLLM. To support Ollama, refactor it to call `getActiveAdapter()` and
-   render whatever models the active adapter returns. Recommended catalog
-   is already exposed via `OllamaAdapter.listModels()`.
-
-2. **useWebLLM hook rename / generalize** — currently hard-coded to the
+1. **useWebLLM hook rename / generalize** — currently hard-coded to the
    WebLLM engine state. Should be renamed to `useLLM` and re-pointed at
    the active adapter's `onStateChange()`.
 
-3. **Gemini direct API call in Tauri mode** — currently the Vercel
-   function `/api/translate/burst` proxies Gemini. In Tauri there are no
-   serverless functions, so the client must call Gemini's REST API
-   directly. Gemini supports CORS, so this works — just need to add a
-   `gemini-direct.ts` client that uses the user-entered key.
-
-4. **Bundle Ollama in installer** — currently users must install Ollama
+2. **Bundle Ollama in installer** — currently users must install Ollama
    themselves. Future option: bundle the Ollama binary in the Tauri
    installer via `externalBin` in `tauri.conf.json`. Adds ~200 MB to
    installer size but eliminates the separate-install step.
 
-5. **CI matrix for cross-platform builds** — GitHub Actions workflow
+3. **CI matrix for cross-platform builds** — GitHub Actions workflow
    with `windows-latest`, `macos-latest`, `ubuntu-22.04` jobs running
    `npm run tauri:build` and uploading artifacts to GitHub Releases.
 
-6. **Updater signing** — `tauri.conf.json → plugins.updater.pubkey` is
+4. **Updater signing** — `tauri.conf.json → plugins.updater.pubkey` is
    empty. Generate a keypair with `tauri signer generate` and add the
    public key, then sign release binaries with the private key in CI.
 
-7. **Streaming inference** — current `ollama_translate` uses
+5. **Streaming inference** — current `ollama_translate` uses
    `"stream": false` for simplicity. For lower time-to-first-token,
    switch to streaming and emit translation chunks via Tauri events,
    then have `TargetEditor` progressively fill the ghost text.
+
+6. **Continuous-assistance multi-trigger system** — idle-pause re-engagement,
+   post-accept re-suggestion, post-dismissal cooldown. Currently ghost-text
+   only fires on segment focus, text change, and deviation. The "assistance
+   that persists during thinking pauses" behavior is the core differentiator
+   but hasn't been built yet.
+
+7. **IndexedDB migration between PWA and Tauri** — each webview origin has
+   its own storage, so glossaries/TM don't carry over. Add an explicit
+   in-app export/import shortcut.
 
 ---
 
@@ -249,11 +271,12 @@ Output per platform:
 | Environment | Local LLM | Gemini | Status |
 |---|---|---|---|
 | PWA, Chrome 113+, no model loaded | WebLLM available but inactive | Vercel function | ✅ Tier-error hint shows "Load Local Model" |
-| PWA, Chrome 113+, model loaded | WebLLM (WebGPU) | Vercel function | ✅ Tier-source badge shows blue `QWEN-1.5B` |
+| PWA, Chrome 113+, model loaded | WebLLM (WebGPU) | Vercel function | ✅ Tier-source badge shows blue model name |
 | PWA, Safari (no WebGPU) | Unavailable | Vercel function | ✅ Falls through to Gemini; amber hint shows "WebGPU not available" |
-| Tauri, Ollama running, model pulled | OllamaAdapter | Direct API (TODO) | ✅ Tier-source badge shows `QWEN-1.5B` (Ollama) |
-| Tauri, Ollama not running | Falls back to WebLLM | Direct API (TODO) | ✅ Adapter factory handles gracefully |
-| Tauri, no Ollama, no WebGPU | null adapter | Direct API (TODO) | ✅ Amber hint suggests installing Ollama |
+| Tauri, Ollama running, model pulled | OllamaAdapter (primary) | Rust proxy ✅ | ✅ Tier-source badge shows model name (Ollama) |
+| Tauri, Ollama not running | null (no WebLLM fallback) | Rust proxy ✅ | ✅ Amber hint with diagnostics + Recheck + Download buttons |
+| Tauri, Ollama cold-start race | Auto-retry after 3s | Rust proxy ✅ | ✅ Picks up Ollama on second attempt |
+| Tauri, corporate proxy/VPN | `.no_proxy()` bypasses it | Rust proxy ✅ | ✅ Loopback traffic never goes through proxy |
 
 ---
 

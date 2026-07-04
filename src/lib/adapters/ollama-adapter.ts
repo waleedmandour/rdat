@@ -133,6 +133,31 @@ let currentProgress = 0;
 let currentError: string | null = null;
 let loadedModelId: string | null = null;
 
+/**
+ * Last health-check diagnostics — which URLs were tried and which errors
+ * occurred. Populated by isAvailable() and readable via
+ * `getHealthDiagnostics()` so the UI can surface them to the user.
+ * This is critical for field debugging: a screenshot of the UI now
+ * contains enough info to diagnose "Ollama not detected" without a
+ * remote debugging session.
+ */
+export interface HealthAttempt {
+  url: string;
+  success: boolean;
+  error: string | null;
+}
+
+export interface HealthDiagnostics {
+  healthy: boolean;
+  attempts: HealthAttempt[];
+}
+
+let lastHealthDiagnostics: HealthDiagnostics | null = null;
+
+export function getHealthDiagnostics(): HealthDiagnostics | null {
+  return lastHealthDiagnostics;
+}
+
 const subscribers: Set<StateChangeCallback> = new Set();
 
 function notifySubscribers() {
@@ -154,15 +179,32 @@ export class OllamaAdapter implements LLMAdapter {
 
   // ── Identity / Availability ──
 
+  /**
+   * Check if Ollama is available. Returns a boolean (for the
+   * LLMAdapter interface) but also stores the full diagnostics
+   * accessible via getHealthDiagnostics().
+   *
+   * The Rust command returns a structured HealthResult with per-URL
+   * attempt details — we extract the boolean here and stash the
+   * diagnostics for the UI.
+   */
   async isAvailable(): Promise<boolean> {
     if (!isTauriEnvironment()) return false;
     try {
       const invoke = await getInvoke();
-      // The Rust command returns true if Ollama daemon responds on
-      // localhost:11434/api/tags within a 2-second timeout.
-      return await invoke("ollama_health");
+      const result = await invoke("ollama_health") as HealthDiagnostics;
+      lastHealthDiagnostics = result;
+      return result.healthy;
     } catch (e: any) {
       console.warn("[OllamaAdapter] health check failed:", e);
+      lastHealthDiagnostics = {
+        healthy: false,
+        attempts: [{
+          url: "(invoke failed)",
+          success: false,
+          error: e?.message || String(e),
+        }],
+      };
       return false;
     }
   }

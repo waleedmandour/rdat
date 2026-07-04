@@ -19,6 +19,7 @@ import {
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { getActiveAdapter, resetAdapter, isTauriEnvironment } from "../lib/adapters";
+import { getHealthDiagnostics, type HealthDiagnostics } from "../lib/adapters/ollama-adapter";
 import type { LLMAdapter, ModelInfo } from "../lib/llm-adapter";
 
 /**
@@ -67,6 +68,7 @@ export function AiModelsView() {
   const [daemonHealthy, setDaemonHealthy] = useState<boolean>(false);
   const [adapterState, setAdapterState] = useState<string>("idle");
   const [adapterError, setAdapterError] = useState<string | null>(null);
+  const [healthDiagnostics, setHealthDiagnostics] = useState<HealthDiagnostics | null>(null);
 
   // ─── Model Operation State ───────────────────────────────────────
   const [loadingModelId, setLoadingModelId] = useState<string | null>(null);
@@ -171,6 +173,7 @@ export function AiModelsView() {
     setAdapterLoading(true);
     setAdapter(null);
     setDaemonHealthy(false);
+    setHealthDiagnostics(null);
 
     const activeAdapter = await getActiveAdapter();
     setAdapter(activeAdapter);
@@ -184,6 +187,11 @@ export function AiModelsView() {
       } catch (e: any) {
         console.warn("[AiModelsView] Refresh failed:", e);
       }
+    } else if (isTauriEnvironment()) {
+      // Capture diagnostics for the UI — shows which URLs were tried
+      // and which errors occurred, so the user can self-diagnose.
+      const diag = getHealthDiagnostics();
+      setHealthDiagnostics(diag);
     }
     setAdapterLoading(false);
   }, []);
@@ -338,6 +346,7 @@ export function AiModelsView() {
           loadedModel={loadedModel}
           isRTL={isRTL}
           onRefresh={refreshModels}
+          diagnostics={healthDiagnostics}
         />
 
         {/* Hardware Profile (compact) */}
@@ -474,6 +483,7 @@ function EngineStatusBanner({
   loadedModel,
   isRTL,
   onRefresh,
+  diagnostics,
 }: {
   adapter: LLMAdapter | null;
   daemonHealthy: boolean;
@@ -482,6 +492,7 @@ function EngineStatusBanner({
   loadedModel: string;
   isRTL: boolean;
   onRefresh: () => void;
+  diagnostics: HealthDiagnostics | null;
 }) {
   if (!adapter) {
     return (
@@ -496,6 +507,29 @@ function EngineStatusBanner({
               ? "لم يتم اكتشاف Ollama أو WebGPU. التطبيق سيعمل في وضع محدود (LTE فقط)."
               : "Neither Ollama nor WebGPU detected. App will run in degraded mode (LTE only)."}
           </div>
+
+          {/* Diagnostics — show which URLs were tried and which errors occurred.
+              This turns every "Ollama not detected" field report into something
+              diagnosable from a screenshot. */}
+          {diagnostics && diagnostics.attempts.length > 0 && (
+            <div className="mt-2 p-2 rounded-lg bg-black/20 dark:bg-black/30 border border-border/40 text-[10px] font-mono space-y-0.5" dir="ltr">
+              <div className="text-muted-foreground font-bold mb-1">
+                {isRTL ? "تفاصيل التشخيص:" : "Diagnostics:"}
+              </div>
+              {diagnostics.attempts.map((attempt, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className={attempt.success ? "text-emerald-500" : "text-rose-500"}>
+                    {attempt.success ? "✓" : "✗"}
+                  </span>
+                  <span className="text-muted-foreground truncate flex-1">{attempt.url}</span>
+                  {attempt.error && (
+                    <span className="text-rose-400 shrink-0">({attempt.error})</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+
           <div className="flex items-center gap-3 mt-2">
             {/* Recheck button — re-runs adapter detection in case Ollama
                 was just started after the app launched. */}
