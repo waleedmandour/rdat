@@ -2,7 +2,7 @@
 
 **Professional English-to-Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Version](https://img.shields.io/badge/Version-0.2.0_Pre--release-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases)
+[![Version](https://img.shields.io/badge/Version-0.2.0-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.2.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
@@ -12,9 +12,9 @@
 
 ## Overview
 
-RDAT Copilot is an AI-powered translation workspace purpose-built for professional English-to-Arabic translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline — from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback — delivering real-time suggestions while keeping translators in full control of every word.
+RDAT: Translation Copilot is an AI-powered translation workspace purpose-built for professional English-to-Arabic translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline, from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback, delivering real-time suggestions while keeping translators in full control of every word.
 
-As of v0.2.0, RDAT Copilot ships in **two complementary forms**, sharing a single React/Vite frontend:
+As of v0.2.0, RDAT ships in **two complementary forms**, sharing a single React/Vite frontend:
 
 | Distribution | Best for | Install size | Local LLM |
 |---|---|---|---|
@@ -29,41 +29,45 @@ The system's primary engine is the **local LLM** (Ollama in desktop mode, WebLLM
 
 ### Three-Tier Ghost-Text Pipeline
 
-RDAT Copilot's suggestion engine operates through a cascading three-tier pipeline. Each tier is consulted in order; the first tier to return a confident result supplies the ghost-text. If a higher-latency tier is already computing, its result replaces the current suggestion upon arrival, enabling progressive refinement without blocking the translator's flow.
+RDAT's suggestion engine operates through a cascading three-tier pipeline. Each tier is consulted in order; the first tier to return a confident result supplies the ghost-text. If a higher-latency tier is already computing, its result replaces the current suggestion upon arrival, enabling progressive refinement without blocking the translator's flow.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                    Ghost-Text Pipeline                          │
-│                                                                 │
-│  Tier 0 ─ LTE (Local Translation Engine)                       │
-│    │  N-gram / fuzzy / sentence-split matching against corpus  │
-│    │  Latency: < 5 ms  |  Channel: lte                        │
-│    │                                                            │
-│  Tier 1 ─ Local LLM (PRIMARY ENGINE)                           │
-│    │  RAG-augmented inference with selective glossary context  │
-│    │  Tauri:  Ollama (native CUDA/Metal, gemma4:e2b default)   │
-│    │  PWA:    WebLLM (WebGPU, q4f16_1 quantization)            │
-│    │  Latency: 200–2000 ms  |  Channel: local-llm              │
-│    │                                                            │
-│  Tier 2 ─ Cloud Gemini (SECONDARY FALLBACK)                    │
-│       Tauri:  Rust-side reqwest proxy → Gemini REST API        │
-│       PWA:    Vercel serverless functions → @google/genai SDK  │
-│       Latency: 500–3000 ms  |  Channel: gemini                │
-│       Supports burst (3 candidates) and full translation       │
-└─────────────────────────────────────────────────────────────────┘
++-----------------------------------------------------------------+
+|                    Ghost-Text Pipeline                          |
+|                                                                 |
+|  Tier 0 - LTE (Local Translation Engine)                       |
+|    |  N-gram / fuzzy / sentence-split matching against corpus  |
+|    |  Latency: < 5 ms  |  Channel: lte                        |
+|    |                                                            |
+|  Tier 1 - Local LLM (PRIMARY ENGINE)                           |
+|    |  RAG-augmented inference with selective glossary context  |
+|    |  Tauri:  Ollama (native CUDA/Metal, gemma4:e2b default)   |
+|    |  PWA:    WebLLM (WebGPU, q4f16_1 quantization)            |
+|    |  Latency: 200-2000 ms  |  Channel: local-llm              |
+|    |                                                            |
+|  Tier 2 - Cloud Gemini (SECONDARY FALLBACK)                    |
+|       Tauri:  Rust-side reqwest proxy to Gemini REST API       |
+|       PWA:    Vercel serverless functions to @google/genai SDK |
+|       Latency: 500-3000 ms  |  Channel: gemini                |
+|       Supports burst (3 candidates) and full translation       |
++-----------------------------------------------------------------+
 ```
+
+### Continuous Assistance (v0.2.0)
+
+The ghost-text pipeline now features **idle-pause re-engagement**: after the translator stops typing for 2 seconds, the system automatically re-triggers the suggestion pipeline to provide fresh or updated suggestions during thinking pauses. This means the system never "gives up" after a single suggestion. It keeps trying while the translator pauses, similar to how Google Search autocomplete continues to refine results as you think.
 
 ### LLMAdapter Abstraction
 
-Both local backends (Ollama and WebLLM) implement a unified `LLMAdapter` interface (`src/lib/llm-adapter.ts`), so the rest of the application — including the editor, status bar, and tier-fallback logic — works identically regardless of which backend is active. The adapter factory (`src/lib/adapters/index.ts`) auto-detects the environment at runtime:
+Both local backends (Ollama and WebLLM) implement a unified `LLMAdapter` interface (`src/lib/llm-adapter.ts`), so the rest of the application, including the editor, status bar, and tier-fallback logic, works identically regardless of which backend is active. The adapter factory (`src/lib/adapters/index.ts`) auto-detects the environment at runtime:
 
-1. **Inside Tauri + Ollama daemon reachable** → `OllamaAdapter` (preferred: native CUDA/Metal acceleration, supports Gemma 4 / Qwen 3 / Llama 4)
-2. **Else if WebGPU available** → `WebLLMAdapter` (browser path, or Tauri fallback when Ollama is not installed)
-3. **Else** → `null` (Gemini-only mode; the editor surfaces an amber hint guiding the user to install Ollama)
+1. **Inside Tauri + Ollama daemon reachable** -> `OllamaAdapter` (preferred: native CUDA/Metal acceleration, supports Gemma 4 / Qwen 3 / Llama 4). If Ollama is not detected on the first attempt, the factory waits 3 seconds and retries once to handle cold-start races.
+2. **Else if WebGPU available** -> `WebLLMAdapter` (browser path only; skipped in Tauri mode since WebGPU in Tauri's webview is unreliable)
+3. **Else** -> `null` (Gemini-only mode; the editor surfaces an amber hint guiding the user to install Ollama)
 
 ### Engine Modes
 
-Three translation pipeline modes are available, selectable via the Settings panel:
+Three translation pipeline modes are available, selectable via the Models panel:
 
 | Mode | Tier(s) Active | Best For |
 |------|---------------|----------|
@@ -71,44 +75,86 @@ Three translation pipeline modes are available, selectable via the Settings pane
 | **Local** | LTE + Local LLM only | Zero data egress, full offline operation, privacy-sensitive environments |
 | **Cloud** | Gemini API only | Complex passages requiring cloud-scale reasoning, or when no local model is available |
 
+### Translation Direction
+
+A direction toggle at the top of the editor lets you switch between **EN to AR** (English to Arabic, default) and **AR to EN** (Arabic to English). The direction is stored in the workspace state and persists across sessions.
+
 ---
 
 ## Key Features
 
 ### Segmented Translation Editor
 
-A split-pane interface with synchronized source-target segment display. English source text is automatically segmented into logical sentences, each paired with a dedicated Arabic translation input field featuring RTL text direction, pronunciation playback via the Web Speech API, and a segment-level confirmation workflow. Segment focus triggers prefetching for zero-latency ghost-text on first keystroke.
+A split-pane interface with synchronized source-target segment display. Source text is automatically segmented into logical sentences, each paired with a dedicated translation input field featuring RTL text direction, pronunciation playback via the Web Speech API, and a segment-level confirmation workflow. Segment focus triggers prefetching for zero-latency ghost-text on first keystroke.
 
 ### Ghost-Text Predictive Completions
 
-Inline ghost-text suggestions appear in real time as translators type. Suggestions are debounced (350 ms) to avoid interfering with typing fluency, and can be accepted with `Tab` (full), `Ctrl+→` (word-by-word), or cycled with `Alt+]`. A **tier-source badge** next to each suggestion shows which tier produced it — green `LTE`, blue `local-llm` (with model name), or amber `GEMINI` — so translators always know the provenance of a suggestion.
+Inline ghost-text suggestions appear in real time as translators type. The pipeline uses three trigger mechanisms:
+- **Segment focus**: immediate prefetch + suggestion
+- **Typing debounce**: 400 ms after the last keystroke
+- **Idle-pause re-engagement**: 2 seconds after typing stops, the system re-triggers suggestions to provide continuous assistance during thinking pauses
+
+Suggestions can be accepted with `Tab` (full), `Ctrl+Right` (word-by-word), or cycled with `Alt+]`. A **tier-source badge** next to each suggestion shows which tier produced it: green `LTE`, blue `local-llm` (with model name), or amber `GEMINI`.
+
+### Status Bar Activity Indicators
+
+The status bar shows the current editor activity in real time:
+- **"Typing..."** (blue) while the user is typing
+- **"Suggesting..."** (indigo, with spinner) while fetching suggestions
+- **"Ready"** (muted) when idle
+- **Engine status**: shows "Ollama: gemma4:e2b" (green) when a model is loaded, or "Ollama: no model loaded (go to Models)" (amber) when guidance is needed
 
 ### RAG-Augmented Local LLM (Primary Engine)
 
-The local LLM is enhanced with Retrieval-Augmented Generation (RAG). Before inference, the system retrieves the top-*k* most relevant glossary/translation memory entries from the LTE and injects them into a structured system prompt that enforces terminological consistency. This means local-LLM translations respect your loaded domain vocabulary — they are not generic LLM output but glossary-aware, context-conditioned suggestions that improve as your corpus grows.
+The local LLM is enhanced with Retrieval-Augmented Generation (RAG). Before inference, the system retrieves the top-*k* most relevant glossary/translation memory entries from the LTE and injects them into a structured system prompt that enforces terminological consistency. This means local-LLM translations respect your loaded domain vocabulary: they are not generic LLM output but glossary-aware, context-conditioned suggestions that improve as your corpus grows.
 
 ### Tier-Source Error Surfacing
 
 When a tier fails, the editor surfaces a precise, actionable diagnostic instead of silently swallowing the error:
-- **Tier 1 (local LLM) failures** → amber inline hint with a "Load Local Model" button that jumps to the Models panel
-- **Tier 2 (Gemini) failures** → quiet gray inline hint with a "Set Gemini API Key" button
+- **Tier 1 (local LLM) failures**: amber inline hint with a "Load Local Model" button that jumps to the Models panel
+- **Tier 2 (Gemini) failures**: quiet gray inline hint with a "Set Gemini API Key" button
+- **Health diagnostics**: when Ollama is not detected, the UI shows exactly which URLs were tried and which errors occurred, making remote diagnosis possible from a screenshot
 - A per-session toast dedup prevents spamming the same error on every keystroke
 
-### GTR Glossary & Terminology Management
+### GTR Glossary and Terminology Management
 
-A dedicated terminology management system supporting JSON file import, pre-loaded reference databases (WIPO Pearl Patent Terminology, Microsoft Tech Terminology, OPUS Parallel Corpus), and chunked IndexedDB storage. Loaded glossary entries are indexed into the LTE for instant matching and also serve as RAG context for the local LLM tier. The system ships with a built-in seed corpus of approximately 80 professionally curated EN→AR pairs spanning CAT terminology, technology, professional phrases, academic research, business, and legal domains.
+A dedicated terminology management system supporting JSON file import, pre-loaded reference databases (WIPO Pearl Patent Terminology, Microsoft Tech Terminology, OPUS Parallel Corpus), and chunked IndexedDB storage. Loaded glossary entries are indexed into the LTE for instant matching and also serve as RAG context for the local LLM tier. The system ships with a built-in seed corpus of approximately 80 professionally curated EN-AR pairs spanning CAT terminology, technology, professional phrases, academic research, business, and legal domains.
+
+### Document Import (.txt and .docx)
+
+The Source Editor supports importing documents in two formats:
+- **.txt**: plain text files, read directly
+- **.docx**: Microsoft Word documents, text extracted via the `mammoth` library (dynamically imported, code-split to avoid bloating the main bundle)
+- **.doc**: legacy binary format is not supported in the browser; users are prompted to convert to .docx or .txt
 
 ### AI Translation Tutor
 
-An interactive pedagogical panel that evaluates active translation drafts. Powered by Gemini with structured JSON output, it provides a numerical rating (0–100), letter grade, detailed stylistic and grammatical analysis, per-term terminology coaching with contextual fit assessment, and common translation pitfall warnings. When offline or without an API key, a built-in local pedagogical engine provides fallback diagnostics.
+An interactive pedagogical panel that evaluates active translation drafts. Powered by Gemini with structured JSON output, it provides a numerical rating (0-100), letter grade, detailed stylistic and grammatical analysis, per-term terminology coaching with contextual fit assessment, and common translation pitfall warnings. When offline or without an API key, a built-in local pedagogical engine provides fallback diagnostics.
+
+### Segment Save with Feedback
+
+The Confirm button (Ctrl+Enter) saves the current segment to IndexedDB and provides clear toast feedback:
+- Success: "Segment N saved successfully"
+- Warning: "Cannot save an empty segment. Please write a translation first."
+- Error: "Failed to save segment: \<error details\>"
 
 ### Ollama Onboarding (Tauri only)
 
-On first run in Tauri mode, if the Ollama daemon is not detected, a 3-step skippable onboarding modal guides the user through: (1) downloading Ollama from ollama.com, (2) starting the daemon (platform-specific instructions), and (3) verifying the connection. Users can skip and continue in degraded LTE-only mode — the app respects user agency and never blocks the editor.
+On first run in Tauri mode, if the Ollama daemon is not detected, a 3-step skippable onboarding modal guides the user through: (1) downloading Ollama from ollama.com, (2) starting the daemon (platform-specific instructions), and (3) verifying the connection. Users can skip and continue in degraded LTE-only mode. The app respects user agency and never blocks the editor.
 
-### PWA & Offline Support (browser mode)
+### Ollama Detection Hardening (v0.2.0)
 
-When deployed as a PWA on Vercel, RDAT Copilot is a fully installable Progressive Web App. It includes a Web App Manifest with standalone display mode, a Service Worker with network-first navigation and cache-first static asset strategy, IndexedDB-based offline storage, and a native install prompt via the `beforeinstallprompt` event on supported browsers.
+The Ollama detection pipeline has been hardened against common field-reported issues:
+- **Proxy bypass**: all Ollama HTTP calls use `.no_proxy()` so corporate VPNs and security software do not intercept loopback traffic
+- **IPv4 explicit**: uses `127.0.0.1` instead of `localhost` to avoid Windows IPv6 `::1` resolution issues
+- **Multi-URL fallback**: tries `OLLAMA_HOST` env var, `127.0.0.1:11434`, then `localhost:11434`
+- **OLLAMA_HOST normalization**: handles bare `host:port`, full URLs, and bare hosts without ports
+- **Cold-start auto-retry**: if Ollama is not detected on the first attempt, waits 3 seconds and retries once
+- **Structured diagnostics**: the UI shows which URLs were tried and which errors occurred
+
+### PWA and Offline Support (browser mode)
+
+When deployed as a PWA on Vercel, RDAT is a fully installable Progressive Web App. It includes a Web App Manifest with standalone display mode, a Service Worker with network-first navigation and cache-first static asset strategy, IndexedDB-based offline storage, and a native install prompt via the `beforeinstallprompt` event on supported browsers.
 
 ---
 
@@ -125,8 +171,9 @@ When deployed as a PWA on Vercel, RDAT Copilot is a fully installable Progressiv
 | **Primary Local LLM** | **Ollama** (Gemma 4 E2B default; Qwen 3, Llama 4 also supported) |
 | Browser Local LLM | `@mlc-ai/web-llm` (WebGPU-accelerated, fallback when no Ollama) |
 | Cloud AI | Google Gemini 2.5 Flash |
-| Cloud Proxy (Tauri) | Rust `gemini_translate` command via reqwest → Gemini REST API |
-| Cloud Proxy (PWA) | Vercel Serverless Functions (Node.js 22.x runtime) → `@google/genai` SDK |
+| Cloud Proxy (Tauri) | Rust `gemini_translate` command via reqwest to Gemini REST API |
+| Cloud Proxy (PWA) | Vercel Serverless Functions (Node.js 22.x runtime) to `@google/genai` SDK |
+| Document Import | `mammoth` (DOCX text extraction, dynamically imported) |
 | Local Development | Express.js (Gemini API proxy) via `tsx` |
 | Storage | IndexedDB (custom dual-storage layer with chunked read/write) |
 | PWA (optional) | Service Worker + Web App Manifest |
@@ -134,17 +181,17 @@ When deployed as a PWA on Vercel, RDAT Copilot is a fully installable Progressiv
 
 ### Supported Local Models
 
-#### Ollama Catalog (Tauri — Primary)
+#### Ollama Catalog (Tauri: Primary)
 
 | Tag | Model | Parameters | Approx. Size | Notes |
 |-----|-------|-----------|-------------|-------|
 | `gemma4:e2b` | **Gemma 4 E2B** (recommended starter) | 2B (Effective) | ~1.5 GB | Auto-selected default for new users |
-| `gemma4:e4b` | Gemma 4 E4B | 4B (Effective) | ~3.0 GB | Higher quality, 2× download |
+| `gemma4:e4b` | Gemma 4 E4B | 4B (Effective) | ~3.0 GB | Higher quality, 2x download |
 | `qwen3:1.7b` | Qwen 3 1.7B | 1.7B | ~1.1 GB | Fast multilingual |
 | `qwen3:4b` | Qwen 3 4B | 4B | ~2.5 GB | Balanced |
 | `llama4:8b` | Llama 4 8B | 8B | ~4.9 GB | Heavyweight |
 
-#### WebLLM Catalog (PWA — Fallback when no Ollama)
+#### WebLLM Catalog (PWA: Fallback when no Ollama)
 
 | Catalog ID | Model | Parameters | Quantization | Approx. Size |
 |------------|-------|-----------|-------------|-------------|
@@ -158,105 +205,34 @@ When deployed as a PWA on Vercel, RDAT Copilot is a fully installable Progressiv
 
 ---
 
-## Project Structure
-
-```
-rdat/
-├── api/                                    # Vercel serverless functions (PWA mode)
-│   ├── _lib/gemini.ts                     # User-owned-key Gemini SDK helper
-│   ├── translate/
-│   │   ├── burst.ts                       # Ghost-text burst suggestions
-│   │   ├── full.ts                        # Full segment translation
-│   │   └── tutor-explain.ts               # AI Translation Tutor analysis
-│   └── health.ts                          # Runtime health-check endpoint
-├── src-tauri/                              # Tauri 2 desktop backend (Rust)
-│   ├── Cargo.toml                         # Rust deps: tauri 2, reqwest, tokio
-│   ├── tauri.conf.json                    # App identity, window, bundle config
-│   ├── capabilities/default.json          # WebView permissions
-│   ├── icons/                             # Generated app icons (all platforms)
-│   └── src/
-│       ├── main.rs                        # Binary entry
-│       ├── lib.rs                         # Tauri builder + command registration
-│       └── commands/
-│           ├── ollama.rs                  # ollama_health/list/pull/remove/translate
-│           └── gemini.rs                  # gemini_translate (Rust→Gemini REST proxy)
-├── public/                                 # PWA assets (manifest, sw, icons)
-├── src/
-│   ├── components/
-│   │   ├── editors/
-│   │   │   ├── SourceEditor.tsx
-│   │   │   ├── TargetEditor.tsx           # Ghost-text pipeline + tier badges
-│   │   │   └── TranslationWorkspace.tsx
-│   │   ├── AiModelsView.tsx              # Adapter-aware model catalog (Ollama/WebLLM)
-│   │   ├── ApiKeysView.tsx               # Gemini key management + Test button
-│   │   ├── GlossaryView.tsx
-│   │   ├── OllamaOnboardingModal.tsx     # 3-step skippable Ollama setup guide
-│   │   ├── QuickGuideModal.tsx
-│   │   ├── Settings.tsx
-│   │   ├── Sidebar.tsx
-│   │   ├── StatusBar.tsx
-│   │   └── WelcomeTab.tsx
-│   ├── context/                           # Language + Toast providers
-│   ├── hooks/
-│   │   ├── useGemini.ts                  # Tauri/PWA Gemini dispatcher
-│   │   ├── useWebLLM.ts                  # WebGPU model lifecycle
-│   │   ├── useRAG.ts                     # RAG/LTE search hook
-│   │   └── useDualStorage.ts             # IndexedDB → LTE loading
-│   ├── lib/
-│   │   ├── llm-adapter.ts                # LLMAdapter interface + shared prompts
-│   │   ├── adapters/
-│   │   │   ├── index.ts                  # Factory: getActiveAdapter()
-│   │   │   ├── ollama-adapter.ts         # Ollama backend (Tauri)
-│   │   │   └── web-llm-adapter.ts        # WebLLM backend (browser)
-│   │   ├── gemini-direct.ts              # Tauri/PWA Gemini call dispatcher
-│   │   ├── local-llm-engine.ts           # WebLLM engine + RAG + prefetch
-│   │   ├── local-translation-engine.ts   # LTE n-gram / fuzzy matching
-│   │   ├── seed-corpus.ts                # ~80 EN→AR seed pairs
-│   │   └── utils.ts
-│   ├── stores/
-│   │   ├── settings-store.ts             # Zustand settings
-│   │   ├── workspace-store.ts            # Zustand workspace
-│   │   └── ui-store.ts                   # Cross-component nav requests
-│   ├── types.ts
-│   ├── App.tsx
-│   ├── main.tsx
-│   └── index.css
-├── server.ts                             # Express dev server (PWA dev)
-├── vercel.json                           # Vercel PWA deployment config
-├── vite.config.ts
-├── tsconfig.json
-└── package.json
-```
-
----
-
 ## Getting Started
 
-### Option A — Tauri Desktop App (Recommended for daily use)
+### Option A: Tauri Desktop App (Recommended for daily use)
 
 #### Prerequisites
 
 - **Node.js** 22+ and **npm**
-- **Rust toolchain** — install via [rustup.rs](https://rustup.rs/) (Rust 1.77+)
-- **Tauri 2 system prerequisites** — see [v2.tauri.app/prerequisites](https://v2.tauri.app/start/prerequisites/)
-  - **Windows:** Microsoft Visual Studio C++ Build Tools
-  - **macOS:** Xcode Command Line Tools (`xcode-select --install`)
-  - **Linux:** `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
-- **[Ollama](https://ollama.com/download)** — the local LLM daemon
+- **Rust toolchain**: install via [rustup.rs](https://rustup.rs/) (Rust 1.77+)
+- **Tauri 2 system prerequisites**: see [v2.tauri.app/prerequisites](https://v2.tauri.app/start/prerequisites/)
+  - **Windows**: Microsoft Visual Studio C++ Build Tools
+  - **macOS**: Xcode Command Line Tools (`xcode-select --install`)
+  - **Linux**: `sudo apt install libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev`
+- **[Ollama](https://ollama.com/download)**: the local LLM daemon
 
 #### Setup
 
 ```bash
 git clone https://github.com/waleedmandour/rdat.git
 cd rdat
+git checkout feature/tauri-ollama-scaffold
 npm install
 
-# Generate Tauri icons from the PWA icon (one-time)
+# Generate Tauri icons from the source icon (one-time)
 npm run tauri:icon
 
 # Start Tauri dev mode (boots Rust backend + Vite dev server + native window)
 npm run tauri:dev
-# First run takes 5–10 min to compile Rust dependencies
+# First run takes 5-10 min to compile Rust dependencies
 ```
 
 On first launch, if Ollama is not running, the onboarding modal will guide you through installation. Once Ollama is running:
@@ -264,25 +240,37 @@ On first launch, if Ollama is not running, the onboarding modal will guide you t
 1. Open the **Models** panel
 2. Click **Pull** on `gemma4:e2b` (recommended starter, ~1.5 GB download)
 3. After the pull completes, click **Load**
-4. Start translating — ghost-text suggestions will appear with a blue `GEMMA4:E2B` badge
+4. Start translating. Ghost-text suggestions will appear with a blue `GEMMA4:E2B` badge.
 
 #### Production Build
 
-```bash
-npm run tauri:build
-# Produces installers in src-tauri/target/release/bundle/:
-#   Windows: .msi + .exe (NSIS)
-#   macOS:   .dmg + .app
-#   Linux:   .deb, .rpm, .AppImage
+**Windows (use NSIS to avoid WiX path issues):**
+```powershell
+npm run tauri:build -- --bundles nsis
+# Output: src-tauri\target\release\bundle\nsis\RDAT Copilot_0.2.0_x64-setup.exe
 ```
 
-### Option B — PWA on Vercel (Try before install)
+**macOS:**
+```bash
+npm run tauri:build
+# Output: src-tauri/target/release/bundle/dmg/RDAT Copilot_0.2.0_aarch64.dmg
+```
+
+**Linux:**
+```bash
+npm run tauri:build
+# Output: src-tauri/target/release/bundle/ (.deb, .rpm, .AppImage)
+```
+
+> **Windows note:** Do NOT build in `C:\Windows\System32\`. Use your user folder instead (e.g. `C:\Users\YourName\rdat`). Always include `-- --bundles nsis` to skip the WiX/MSI bundler which fails on usernames with spaces.
+
+### Option B: PWA on Vercel (Try before install)
 
 #### Prerequisites
 
 - **Node.js** 22+ and **npm**
 - **WebGPU-compatible browser** (Chrome 113+, Edge 113+) for on-device LLM inference in the browser
-- **Google Gemini API key** (optional, for cloud fallback) — obtain from [Google AI Studio](https://aistudio.google.com/apikey)
+- **Google Gemini API key** (optional, for cloud fallback): obtain from [Google AI Studio](https://aistudio.google.com/apikey)
 
 #### Setup
 
@@ -300,7 +288,7 @@ npm run dev
 
 #### Deploy to Vercel
 
-The repository includes a `vercel.json` configuration. Connect the GitHub repository to Vercel and it will auto-deploy. **No environment variables are required** — the app uses a user-owned-key model where each user enters their own Gemini API key in the app's API Keys panel.
+The repository includes a `vercel.json` configuration. Connect the GitHub repository to Vercel and it will auto-deploy. **No environment variables are required**: the app uses a user-owned-key model where each user enters their own Gemini API key in the app's API Keys panel.
 
 - **Framework:** Vite (auto-detected)
 - **API routes:** Files under `api/**/*.ts` are deployed as serverless functions (Node.js 22.x runtime)
@@ -311,7 +299,7 @@ The repository includes a `vercel.json` configuration. Connect the GitHub reposi
 
 ## Gemini API Key (User-Owned Model)
 
-RDAT Copilot uses a **user-owned-key** model for Gemini access. Each user enters their own API key in the app's **API Keys** panel — the key is stored in the browser's localStorage and sent with each request. No keys are stored server-side.
+RDAT uses a **user-owned-key** model for Gemini access. Each user enters their own API key in the app's **API Keys** panel. The key is stored in the browser's localStorage and sent with each request. No keys are stored server-side.
 
 - **In Tauri mode:** keys are sent to the Rust backend, which calls the Gemini REST API via `reqwest`. This avoids CORS issues and works with Google's post-June-19-2026 API key restrictions.
 - **In PWA mode:** keys are sent to the Vercel serverless functions, which use the `@google/genai` SDK to call Gemini.
@@ -325,7 +313,7 @@ Get a free key from [Google AI Studio](https://aistudio.google.com/apikey). The 
 | Shortcut | Action |
 |----------|--------|
 | `Tab` | Accept full ghost-text suggestion |
-| `Ctrl + →` | Accept next word of suggestion |
+| `Ctrl + Right` | Accept next word of suggestion |
 | `Alt + ]` | Cycle through alternative candidates |
 | `Esc` | Dismiss current suggestion |
 | `Ctrl + Enter` | Confirm and save segment |
@@ -334,7 +322,7 @@ Get a free key from [Google AI Studio](https://aistudio.google.com/apikey). The 
 
 ## Internationalization
 
-RDAT Copilot supports full bilingual UI (English/Arabic) with automatic RTL layout switching. All interface elements — labels, placeholder text, contextual hints, and navigation — adapt to the selected language. The AI Translation Tutor can provide feedback in either English or Arabic depending on the active locale. Switch between EN/AR using the sidebar language toggle.
+RDAT supports full bilingual UI (English/Arabic) with automatic RTL layout switching. All interface elements (labels, placeholder text, contextual hints, and navigation) adapt to the selected language. The AI Translation Tutor can provide feedback in either English or Arabic depending on the active locale. Switch between EN/AR using the sidebar language toggle.
 
 ---
 
@@ -353,12 +341,21 @@ For architectural details, adapter patterns, and migration notes, see [TAURI-MIG
 
 ## Roadmap
 
-- **Continuous-assistance multi-trigger system**: Idle-pause re-engagement, post-accept re-suggestion, and post-dismissal cooldown to provide Google-style autocomplete that persists during translator thinking pauses (2 to 3 seconds).
 - **Streaming inference**: Streaming token generation for both Ollama and WebLLM to reduce time-to-first-token below 800 ms.
 - **Context window expansion**: Pass previous/next segment source to the LLM for terminological consistency across segments.
-- **Arabic-to-English (AR to EN) translation direction**: Currently unidirectional (EN to AR).
+- **Full AR-to-EN pipeline**: The direction toggle exists in v0.2.0 but the reverse LTE index and bidirectional prompts are a future enhancement.
 - **CI matrix for cross-platform builds**: GitHub Actions for Windows, macOS, and Linux installer production.
 - **Updater signing**: Generate a Tauri updater keypair and host signed manifests on GitHub Releases.
+- **Bundle Ollama in installer**: Eliminate the separate Ollama install step by bundling the daemon via `externalBin`.
+- **IndexedDB migration between PWA and Tauri**: Add an explicit in-app export/import shortcut for glossary data.
+
+---
+
+## Citation
+
+If you use RDAT: Translation Copilot in academic work, please cite:
+
+> Mandour, W. (2026). *RDAT: Translation Copilot (Version 0.2.0)* [Computer software]. Sultan Qaboos University. https://doi.org/10.17605/OSF.IO/GAQ4K
 
 ---
 
@@ -380,6 +377,8 @@ Copyright (c) 2026 Dr. Waleed Mandour
 This tool supports academic researchers and professional translators working with English-Arabic bilingual corpora.
 
 - Email: [w.abumandour@squ.edu.om](mailto:w.abumandour@squ.edu.om)
+- Website: [waleedmandour.org](https://waleedmandour.org)
+- ORCID: [0000-0002-9262-5993](https://orcid.org/0000-0002-9262-5993)
 - Repository: [github.com/waleedmandour/rdat](https://github.com/waleedmandour/rdat)
 
 The development of RDAT: Translation Copilot has been performed with the assistance of multi-AI agents. The primary AI assistant used throughout the development lifecycle was **GLM 5.2** (2026) by Z.ai, which was used for code generation, architectural analysis, debugging, documentation, and visual design. Additional AI agents were consulted for code review, research synthesis, and cross-platform testing guidance.
