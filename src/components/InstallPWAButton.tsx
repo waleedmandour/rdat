@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { X, Sparkles, Download } from "lucide-react";
+import { isTauriEnvironment } from "../lib/adapters/ollama-adapter";
 
 interface BeforeInstallPromptEvent extends Event {
   prompt: () => Promise<void>;
@@ -13,6 +14,11 @@ export function InstallPWAButton() {
   const [showPrompt, setShowPrompt] = useState(false);
   const [isInstalled, setIsInstalled] = useState(false);
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
+
+  // Hide entirely in Tauri mode - this is a PWA-only feature
+  if (isTauriEnvironment()) {
+    return null;
+  }
 
   useEffect(() => {
     // Check if app is already running as standalone PWA

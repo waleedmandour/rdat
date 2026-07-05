@@ -385,6 +385,9 @@ export function TargetEditor({
     setSuggestionCandidates([]);
     setTierSource(null);
     lastSuggestionTextRef.current = "";
+
+    // Reset activity to idle after fetch completes
+    setEditorActivity("idle");
   }, [sourceText, generateBurst]);
 
   // ─── Prefetch on segment focus + typing debounce + idle-pause re-engagement ───
@@ -422,7 +425,7 @@ export function TargetEditor({
         return;
       }
       prefetchTranslation(sourceText).catch(() => {});
-      fetchSuggestions(translationText);
+      fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
       return;
     }
 
@@ -435,7 +438,7 @@ export function TargetEditor({
     if (lastSuggestionTextRef.current && translationText.trim()) {
       const deviation = deviationRatio(translationText.trim(), lastSuggestionTextRef.current);
       if (deviation > DEVIATION_THRESHOLD) {
-        fetchSuggestions(translationText);
+        fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
         return;
       }
     }
@@ -448,7 +451,7 @@ export function TargetEditor({
     setEditorActivity("typing");
     debounceRef.current = setTimeout(() => {
       setEditorActivity("suggesting");
-      fetchSuggestions(translationText);
+      fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
 
       // Timer 2: idle-pause re-engagement (2s after debounce)
       // If the user hasn't typed anything for 2 seconds after the initial
@@ -457,7 +460,7 @@ export function TargetEditor({
       idleTimerRef.current = setTimeout(() => {
         // Only re-engage if the segment is still active and user hasn't typed
         if (isActive && translationText.trim()) {
-          fetchSuggestions(translationText);
+          fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
         }
       }, IDLE_PAUSE_MS);
     }, 400);

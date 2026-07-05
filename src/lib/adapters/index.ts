@@ -27,6 +27,7 @@
 import type { LLMAdapter } from "../llm-adapter";
 import { OllamaAdapter, isTauriEnvironment } from "./ollama-adapter";
 import { WebLLMAdapter } from "./web-llm-adapter";
+import { useSettingsStore } from "../../stores/settings-store";
 
 let activeAdapter: LLMAdapter | null = null;
 let selectionPromise: Promise<LLMAdapter | null> | null = null;
@@ -68,27 +69,43 @@ export async function getActiveAdapter(): Promise<LLMAdapter | null> {
         let available = await withTimeout(ollama.isAvailable(), 8000, false);
 
         // ── Auto-retry on initial launch ──
-        // If Ollama wasn't detected on the first attempt, wait 3s and
-        // retry once. This handles the cold-start race where Ollama is
-        // set to autostart at login but hasn't bound its HTTP listener
-        // yet when RDAT launches simultaneously.
-        if (!available) {
-          console.log("[AdapterFactory] Ollama not detected on first attempt. Retrying in 3s (cold-start race protection)...");
-          await new Promise(resolve => setTimeout(resolve, 3000));
+        // If Ollama wasn't detected on the first attempt, retry with
+        // increasing delays. If the user had a model loaded in a prior
+        // session (loadedModel is in localStorage), retry more aggressively
+        // because we know Ollama was working before.
+        const savedModel = useSettingsStore.getState().loadedModel;
+        const maxRetries = savedModel ? 3 : 1; // 3 retries if prior model exists
+        const retryDelay = savedModel ? 2000 : 3000; // 2s if prior model, 3s otherwise
+
+        for (let attempt = 0; attempt < maxRetries && !available; attempt++) {
+          console.log(`[AdapterFactory] Ollama not detected (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${retryDelay / 1000}s...`);
+          await new Promise(resolve => setTimeout(resolve, retryDelay));
           available = await withTimeout(ollama.isAvailable(), 8000, false);
         }
 
         if (available) {
           console.log("[AdapterFactory] Selected OllamaAdapter (Tauri + Ollama daemon).");
           activeAdapter = ollama;
+
+          // ── Auto-load previously selected model ──
+          // If the user had a model loaded in a prior session, automatically
+          // re-select it so they don't have to manually click "Load" every
+          // time they restart the app. The model weights are still cached
+          // by Ollama on disk; this just sets our active model ID.
+          if (savedModel) {
+            try {
+              console.log(`[AdapterFactory] Auto-loading previously selected model: ${savedModel}`);
+              await ollama.loadModel(savedModel);
+            } catch (e) {
+              console.warn(`[AdapterFactory] Auto-load of ${savedModel} failed:`, e);
+              // Don't fail the whole detection if auto-load fails — the
+              // user can manually load from the Models panel.
+            }
+          }
+
           return activeAdapter;
         }
-        console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable after retry.");
-        // In Tauri mode, DO NOT fall through to WebLLM. WebGPU in Tauri's
-        // WebView2/WKWebView is unreliable and the user should install
-        // Ollama instead. Return null immediately — the AiModelsView will
-        // show the "Install Ollama" warning with diagnostics.
-        console.log("[AdapterFactory] Skipping WebLLM check in Tauri mode. Returning null.");
+        console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable after retries.");
         activeAdapter = null;
         return activeAdapter;
       } catch (e) {
