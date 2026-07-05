@@ -118,7 +118,7 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
                   {isRTL ? "د. وليد أبو مندور" : "Dr. Waleed Mandour"}
                 </div>
                 <div className="text-[10.5px] text-muted-foreground flex items-center gap-1">
-                  <span>{isRTL ? "أستاذ مساعد، جامعة السلطان قابوس، سلطنة عمان" : "Assistant Professor, Sultan Qaboos University, Oman"}</span>
+                  <span>{isRTL ? "أستاذ مساعد، جامعة السلطان قابوس، سلطنة عمان" : "Assistant Lecturer, Sultan Qaboos University, Oman"}</span>
                   <span className="text-primary font-bold">•</span>
                   <span>2026</span>
                 </div>

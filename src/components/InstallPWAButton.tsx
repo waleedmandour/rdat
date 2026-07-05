@@ -15,12 +15,10 @@ export function InstallPWAButton() {
   const [isInstalled, setIsInstalled] = useState(false);
   const deferredPromptRef = useRef<BeforeInstallPromptEvent | null>(null);
 
-  // Hide entirely in Tauri mode - this is a PWA-only feature
-  if (isTauriEnvironment()) {
-    return null;
-  }
-
   useEffect(() => {
+    // Hide entirely in Tauri mode - this is a PWA-only feature
+    if (isTauriEnvironment()) return;
+
     // Check if app is already running as standalone PWA
     const isStandalone =
       window.matchMedia("(display-mode: standalone)").matches ||
@@ -77,7 +75,8 @@ export function InstallPWAButton() {
     }
   };
 
-  if (!showPrompt || isInstalled) return null;
+  // Hide entirely in Tauri mode or if prompt shouldn't show
+  if (isTauriEnvironment() || !showPrompt || isInstalled) return null;
 
   const hasNativePrompt = !!deferredPromptRef.current;
 

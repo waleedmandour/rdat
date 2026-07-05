@@ -372,7 +372,7 @@ Copyright (c) 2026 Dr. Waleed Mandour
 
 ## Acknowledgements
 
-**Developed by Dr. Waleed Mandour**, Assistant Professor at Sultan Qaboos University, Oman.
+**Developed by Dr. Waleed Mandour**, Assistant Lecturer at Sultan Qaboos University, Oman.
 
 This tool supports academic researchers and professional translators working with English-Arabic bilingual corpora.
 
