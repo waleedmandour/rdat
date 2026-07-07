@@ -272,6 +272,13 @@ export class OllamaAdapter implements LLMAdapter {
 
     try {
       const invoke = await getInvoke();
+      console.log("[OllamaAdapter] translate() called", {
+        model: loadedModelId,
+        sourceText: sourceText.substring(0, 60),
+        targetPrefix: targetPrefix.substring(0, 60),
+        hasRag: !!ragEntries && ragEntries.length > 0,
+      });
+
       const result = await invoke("ollama_translate", {
         req: {
           model: loadedModelId,
@@ -287,8 +294,33 @@ export class OllamaAdapter implements LLMAdapter {
         throw new Error(result.error);
       }
 
+      const candidates = result.candidates || [];
+      console.log("[OllamaAdapter] translate() returned", {
+        candidateCount: candidates.length,
+        firstCandidate: candidates[0]?.substring(0, 80),
+      });
+
+      // If the user typed a prefix, the model returns ONLY the continuation
+      // (per the continuation prompt). We need to combine prefix + continuation
+      // into a full candidate so computeGhostRemainder can extract the remainder.
+      const prefix = targetPrefix.trim();
+      if (prefix && candidates.length > 0) {
+        const continuation = candidates[0].trim();
+        // Combine: prefix + space + continuation (if continuation doesn't already start with prefix)
+        let fullCandidate;
+        if (continuation.startsWith(prefix)) {
+          // Model returned the full translation (didn't follow "continue only" instruction)
+          fullCandidate = continuation;
+        } else {
+          // Model returned just the continuation - prepend the prefix
+          fullCandidate = prefix + " " + continuation;
+        }
+        console.log("[OllamaAdapter] Combined candidate:", fullCandidate.substring(0, 80));
+        return [fullCandidate];
+      }
+
       setState("ready");
-      return result.candidates || [];
+      return candidates;
     } catch (e: any) {
       const msg = e?.message || String(e);
       console.error("[OllamaAdapter] translate failed:", msg);

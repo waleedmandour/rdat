@@ -184,7 +184,21 @@ export function buildRAGSystemPrompt(ragEntries?: CorpusEntry[]): string {
 
 export function buildUserPrompt(sourceText: string, targetPrefix?: string): string {
   const prefix = targetPrefix?.trim();
-  return prefix
-    ? `Translate the following English text to Arabic. The translation must start with: "${prefix}"\n\nEnglish: ${sourceText}\nArabic:`
-    : `Translate the following English text to Arabic.\n\nEnglish: ${sourceText}\nArabic:`;
+  if (prefix) {
+    // Continuation prompt: the model sees the source text AND the partial
+    // translation, and must continue from where the translator left off.
+    // This is more effective with small models (1.5B-2B) than asking for
+    // a full translation that "must start with" the prefix, because:
+    //   1. The model sees the prefix as already-done work, not a constraint
+    //   2. The model's job is to CONTINUE, not to RE-GENERATE
+    //   3. The output is more likely to be a natural continuation
+    return `English source: ${sourceText}
+
+Arabic translation so far: ${prefix}
+
+Continue the Arabic translation. Output ONLY the next words that follow "${prefix}". Do not repeat what is already written. Do not add explanations.`;
+  }
+  return `English source: ${sourceText}
+
+Translate to Arabic. Output ONLY the Arabic translation. Do not add explanations.`;
 }

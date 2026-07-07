@@ -214,21 +214,14 @@ export function TargetEditor({
     }
 
     // ── TIER 1: Local LLM (PRIMARY ENGINE) ──
-    // LTE corpus entries become RAG context for the LLM.
-    //
-    // Adapter pattern: in Tauri desktop mode with Ollama installed,
-    // we use the OllamaAdapter (native CUDA/Metal, faster, supports
-    // larger models). Otherwise we fall back to the legacy WebLLM
-    // path (in-browser WebGPU). Both paths produce the same shape
-    // of output (string[] candidates) so the rest of the pipeline
-    // is identical.
-    //
-    // If Tier 1 is unavailable, we surface the precise reason so the
-    // user knows exactly why ghost-text is missing — instead of the
-    // old behavior where Tier 1 was silently skipped.
     const isCloudOnlyMode = engineModeRef.current === "cloud";
     if (!isCloudOnlyMode) {
       const adapter = getActiveAdapterSync();
+      console.log("[TargetEditor] Tier 1 check:", {
+        adapter: adapter ? adapter.displayName : "null",
+        modelLoaded: adapter ? adapter.isModelLoaded() : false,
+        typedText: typedText.substring(0, 40),
+      });
 
       // ── Branch A: Active adapter (Ollama in Tauri, or WebLLM via adapter) ──
       if (adapter) {

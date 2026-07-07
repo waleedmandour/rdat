@@ -55,6 +55,18 @@ export function WorkspaceShell() {
   const [onboardingChecking, setOnboardingChecking] = useState(false);
 
   useEffect(() => {
+    // ── Trigger adapter detection on app startup ──
+    // This is CRITICAL: if we don't call getActiveAdapter() early,
+    // getActiveAdapterSync() in TargetEditor returns null and no
+    // suggestions are ever generated. Previously this was only called
+    // when the user visited the Models panel, which meant the editor
+    // had no adapter until the user navigated there manually.
+    import("../lib/adapters").then(({ getActiveAdapter }) => {
+      getActiveAdapter().then((adapter) => {
+        console.log("[WorkspaceShell] Initial adapter detection:", adapter ? adapter.displayName : "null");
+      });
+    });
+
     // Check on mount whether we should show the onboarding modal
     if (shouldShowOllamaOnboarding()) {
       // Defer slightly so the app shell renders first
