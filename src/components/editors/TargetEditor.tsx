@@ -9,7 +9,7 @@ import {
   prefetchTranslation,
   getPrefetch,
 } from "../../lib/local-llm-engine";
-import { getActiveAdapterSync, isTauriEnvironment } from "../../lib/adapters";
+import { getActiveAdapterSync, getActiveAdapter, isTauriEnvironment } from "../../lib/adapters";
 import type { LLMAdapter } from "../../lib/llm-adapter";
 import { useGemini } from "../../hooks/useGemini";
 import { useSettingsStore } from "../../stores/settings-store";
@@ -216,7 +216,17 @@ export function TargetEditor({
     // ── TIER 1: Local LLM (PRIMARY ENGINE) ──
     const isCloudOnlyMode = engineModeRef.current === "cloud";
     if (!isCloudOnlyMode) {
-      const adapter = getActiveAdapterSync();
+      // Use async getActiveAdapter() instead of sync version.
+      // The sync version returns null until the async detection
+      // (which takes 3-8 seconds for Ollama health check + retries
+      // + auto-load) completes. By awaiting the async version, we
+      // wait for the adapter to become available before proceeding.
+      let adapter = getActiveAdapterSync();
+      if (!adapter) {
+        console.log("[TargetEditor] Adapter not ready yet, awaiting getActiveAdapter()...");
+        adapter = await getActiveAdapter();
+      }
+
       console.log("[TargetEditor] Tier 1 check:", {
         adapter: adapter ? adapter.displayName : "null",
         modelLoaded: adapter ? adapter.isModelLoaded() : false,
@@ -258,18 +268,27 @@ export function TargetEditor({
             });
             if (fetchId !== latestFetchId.current) return;
 
-            if (llmCandidates.length > 0) {
+            console.log("[TargetEditor] LLM returned:", {
+              count: llmCandidates.length,
+              first: llmCandidates[0]?.substring(0, 60),
+            });
+
+            if (llmCandidates.length > 0 && llmCandidates[0].trim()) {
               const best = llmCandidates[0];
               const remainder = computeGhostRemainder(typedText, best);
-              setGhostSuggestion(remainder);
-              setSuggestionCandidates(llmCandidates);
-              setCandidateIndex(0);
-              setTierSource("local-llm");
-              setTierError((prev) => prev?.tier === "local-llm" ? null : prev);
-              notifiedRef.current.delete("tier1-no-model");
-              notifiedRef.current.delete("tier1-inference-failed");
-              lastSuggestionTextRef.current = best;
-              return;
+              if (remainder.trim()) {
+                setGhostSuggestion(remainder);
+                setSuggestionCandidates(llmCandidates);
+                setCandidateIndex(0);
+                setTierSource("local-llm");
+                setTierError((prev) => prev?.tier === "local-llm" ? null : prev);
+                notifiedRef.current.delete("tier1-no-model");
+                notifiedRef.current.delete("tier1-inference-failed");
+                lastSuggestionTextRef.current = best;
+                return;
+              } else {
+                console.log("[TargetEditor] LLM returned candidate but remainder is empty (candidate equals typed text)");
+              }
             }
           } catch (e: any) {
             console.warn("[TargetEditor] Adapter inference failed:", e);
@@ -284,9 +303,6 @@ export function TargetEditor({
         }
       }
       // ── Branch B: No adapter (legacy PWA path, direct WebLLM calls) ──
-      // This branch is taken when the adapter factory hasn't resolved
-      // yet (early page load) or returned null. We keep the original
-      // direct-call path so the existing PWA behavior is unchanged.
       else if (isModelLoaded()) {
         const fetchId = ++latestFetchId.current;
         try {

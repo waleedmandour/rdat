@@ -83,21 +83,20 @@ export function AiModelsView() {
   const [evaluatingSpecs, setEvaluatingSpecs] = useState<boolean>(true);
 
   // ─── Detect active adapter on mount ──────────────────────────────
-  // Safety: if getActiveAdapter() hasn't resolved in 6 seconds, force
-  // the loading state to clear and show the "no adapter" warning.
-  // With the source-level fixes (isWebGPUAvailable has 2s timeout,
-  // WebLLM check is skipped in Tauri mode), the factory should resolve
-  // in ≤3s. 6s is a generous safety margin.
+  // Safety: if getActiveAdapter() hasn't resolved in 20 seconds, force
+  // the loading state to clear. The factory can take up to ~15s when
+  // it does 3 retries with 2s delays each (for users with a saved model
+  // whose Ollama is slow to start). 20s is a generous safety margin.
   useEffect(() => {
     let cancelled = false;
     const safetyTimer = setTimeout(() => {
       if (!cancelled && adapterLoading) {
-        console.warn("[AiModelsView] Adapter detection timed out after 6s — showing no-adapter state.");
+        console.warn("[AiModelsView] Adapter detection timed out after 20s.");
         setAdapter(null);
         setAdapterLoading(false);
         setDaemonHealthy(false);
       }
-    }, 6000);
+    }, 20000);
 
     (async () => {
       setAdapterLoading(true);

@@ -422,15 +422,28 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         .await
         .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
 
+    eprintln!(
+        "[ollama_translate] Response received: response='{}' done={}",
+        gen_resp.response.chars().take(100).collect::<String>(),
+        gen_resp.done
+    );
+
     let translation = gen_resp.response.trim().to_string();
 
     if translation.is_empty() {
+        // Log the full request for debugging
+        eprintln!(
+            "[ollama_translate] Empty response! Model={}, prompt='{}'",
+            req.model,
+            req.user_prompt.chars().take(200).collect::<String>()
+        );
         return Ok(TranslateResponse {
             candidates: vec![],
-            error: Some("Ollama returned an empty translation.".to_string()),
+            error: Some("Ollama returned an empty translation. The model may not support this prompt format or may need a different temperature setting.".to_string()),
         });
     }
 
+    eprintln!("[ollama_translate] Success: {} chars", translation.len());
     Ok(TranslateResponse {
         candidates: vec![translation],
         error: None,
