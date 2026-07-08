@@ -10,6 +10,7 @@ import { AiModelsView } from "./AiModelsView";
 import { ApiKeysView } from "./ApiKeysView";
 import { GlossaryView } from "./GlossaryView";
 import { QuickGuideModal } from "./QuickGuideModal";
+import { WelcomeWindow, shouldShowWelcome } from "./WelcomeWindow";
 import { OllamaOnboardingModal, shouldShowOllamaOnboarding } from "./OllamaOnboardingModal";
 import { InstallPWAButton } from "./InstallPWAButton";
 import { useLanguage } from "../context/LanguageContext";
@@ -47,6 +48,7 @@ export function WorkspaceShell() {
   const [activeNav, setActiveNav] = useState<NavItem | "welcome">("welcome");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [showGuide, setShowGuide] = useState(false);
+  const [showWelcome, setShowWelcome] = useState(shouldShowWelcome());
 
   // ─── Ollama Onboarding Modal ────────────────────────────────────
   // Shows on startup if running in Tauri AND Ollama is not detected.
@@ -276,6 +278,11 @@ export function WorkspaceShell() {
         onRetry={handleOnboardingRetry}
         isChecking={onboardingChecking}
       />
+
+      {/* Welcome window (3-page onboarding, first run only) */}
+      {showWelcome && (
+        <WelcomeWindow onComplete={() => setShowWelcome(false)} />
+      )}
     </div>
   );
 }

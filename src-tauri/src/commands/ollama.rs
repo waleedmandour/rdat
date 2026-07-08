@@ -379,10 +379,18 @@ pub async fn ollama_remove_model(model: String) -> Result<(), String> {
 
 // ─── Command: ollama_translate ────────────────────────────────────
 
-/// Generate a translation via the Ollama daemon.
+/// Generate a translation via the Ollama daemon using /api/chat.
+///
+/// Uses /api/chat instead of /api/generate because:
+///   1. /api/chat is the recommended endpoint in Ollama's current API
+///   2. It handles system prompts more reliably with small models
+///   3. It returns a cleaner message structure
+///
+/// The raw response body is captured as text first, then parsed,
+/// so we can log it for debugging if parsing fails.
 #[tauri::command]
 pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse, String> {
-    let url = format!("{}/api/generate", ollama_base_url());
+    let url = format!("{}/api/chat", ollama_base_url());
     let client = ollama_inference_client();
 
     eprintln!(
@@ -390,16 +398,24 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         req.model, req.max_tokens, req.temperature
     );
 
+    // Use /api/chat with messages array (more reliable than /api/generate)
     let body = serde_json::json!({
         "model": req.model,
-        "system": req.system_prompt,
-        "prompt": req.user_prompt,
+        "messages": [
+            {"role": "system", "content": req.system_prompt},
+            {"role": "user", "content": req.user_prompt}
+        ],
         "stream": false,
         "options": {
             "num_predict": req.max_tokens,
             "temperature": req.temperature,
         }
     });
+
+    eprintln!(
+        "[ollama_translate] Sending request to {} with model={}",
+        url, req.model
+    );
 
     let resp = client
         .post(&url)
@@ -408,38 +424,75 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         .await
         .map_err(|e| format!("Failed to reach Ollama: {}", e))?;
 
-    if !resp.status().is_success() {
-        let status = resp.status();
-        let body = resp.text().await.unwrap_or_default();
+    let status = resp.status();
+    // Capture raw response text BEFORE parsing
+    let raw_body = resp.text().await.unwrap_or_default();
+
+    eprintln!(
+        "[ollama_translate] HTTP {} response ({} bytes): {}",
+        status,
+        raw_body.len(),
+        raw_body.chars().take(500).collect::<String>()
+    );
+
+    if !status.is_success() {
         return Ok(TranslateResponse {
             candidates: vec![],
-            error: Some(format!("Ollama returned status {}: {}", status, body)),
+            error: Some(format!("Ollama returned status {}: {}", status, raw_body.chars().take(300).collect::<String>())),
         });
     }
 
-    let gen_resp: OllamaGenerateResponse = resp
-        .json()
-        .await
-        .map_err(|e| format!("Failed to parse Ollama response: {}", e))?;
+    // Parse the raw body as JSON
+    let json: serde_json::Value = match serde_json::from_str(&raw_body) {
+        Ok(v) => v,
+        Err(e) => {
+            return Ok(TranslateResponse {
+                candidates: vec![],
+                error: Some(format!("Failed to parse Ollama JSON response: {} — raw: {}", e, raw_body.chars().take(200).collect::<String>())),
+            });
+        }
+    };
+
+    // Extract the message content from /api/chat response format:
+    // { "message": { "role": "assistant", "content": "..." }, "done": true }
+    let translation = json
+        .get("message")
+        .and_then(|m| m.get("content"))
+        .and_then(|c| c.as_str())
+        .unwrap_or("")
+        .trim()
+        .to_string();
+
+    // Fallback: try /api/generate response format:
+    // { "response": "...", "done": true }
+    let translation = if translation.is_empty() {
+        json.get("response")
+            .and_then(|r| r.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string()
+    } else {
+        translation
+    };
 
     eprintln!(
-        "[ollama_translate] Response received: response='{}' done={}",
-        gen_resp.response.chars().take(100).collect::<String>(),
-        gen_resp.done
+        "[ollama_translate] Extracted translation ({} chars): '{}'",
+        translation.len(),
+        translation.chars().take(100).collect::<String>()
     );
 
-    let translation = gen_resp.response.trim().to_string();
-
     if translation.is_empty() {
-        // Log the full request for debugging
         eprintln!(
-            "[ollama_translate] Empty response! Model={}, prompt='{}'",
-            req.model,
-            req.user_prompt.chars().take(200).collect::<String>()
+            "[ollama_translate] EMPTY translation! Full response: {}",
+            raw_body.chars().take(500).collect::<String>()
         );
         return Ok(TranslateResponse {
             candidates: vec![],
-            error: Some("Ollama returned an empty translation. The model may not support this prompt format or may need a different temperature setting.".to_string()),
+            error: Some(format!(
+                "Ollama returned an empty translation. Model: {}. Raw response: {}",
+                req.model,
+                raw_body.chars().take(200).collect::<String>()
+            )),
         });
     }
 

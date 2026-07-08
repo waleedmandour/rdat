@@ -31,17 +31,17 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
         <AnimatePresence>
           {toasts.map((toast) => {
             let icon = <Info className="w-4 h-4 text-primary" />;
-            let borderClass = "border-primary/20 dark:bg-[#14161b] bg-background/95 text-foreground";
+            let borderClass = "border-primary/20 dark:bg-[#14161b] bg-background/95 text-white dark:text-white text-foreground";
             
             if (toast.type === "success") {
               icon = <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-emerald-400" />;
-              borderClass = "border-emerald-500/20 dark:bg-emerald-950/40 bg-emerald-50 text-foreground";
+              borderClass = "border-emerald-500/20 dark:bg-emerald-950/80 bg-emerald-50 text-white dark:text-white text-foreground";
             } else if (toast.type === "error") {
               icon = <AlertCircle className="w-4 h-4 text-rose-400 dark:text-rose-400" />;
-              borderClass = "border-rose-500/20 dark:bg-rose-950/40 bg-rose-50 text-foreground";
+              borderClass = "border-rose-500/20 dark:bg-rose-950/80 bg-rose-50 text-white dark:text-white text-foreground";
             } else if (toast.type === "warning") {
               icon = <AlertCircle className="w-4 h-4 text-amber-400 dark:text-amber-400" />;
-              borderClass = "border-amber-500/20 dark:bg-amber-950/40 bg-amber-50 text-foreground";
+              borderClass = "border-amber-500/20 dark:bg-amber-950/80 bg-amber-50 text-white dark:text-white text-foreground";
             }
 
             return (
@@ -53,12 +53,12 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 className={`pointer-events-auto flex items-start gap-3 p-4 rounded-xl border backdrop-blur-md shadow-lg transition-all ${borderClass}`}
               >
                 <div className="mt-0.5 shrink-0">{icon}</div>
-                <div className="flex-1 text-xs font-semibold leading-relaxed pr-2">
+                <div className="flex-1 text-xs font-semibold leading-relaxed pr-2 text-white dark:text-white">
                   {toast.message}
                 </div>
                 <button
                   onClick={() => removeToast(toast.id)}
-                  className="shrink-0 p-0.5 hover:bg-white/10 rounded transition-colors text-muted-foreground hover:text-foreground cursor-pointer"
+                  className="shrink-0 p-0.5 hover:bg-white/10 rounded transition-colors text-white/60 hover:text-white cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
