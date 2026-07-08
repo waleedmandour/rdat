@@ -355,7 +355,7 @@ For architectural details, adapter patterns, and migration notes, see [TAURI-MIG
 
 If you use RDAT: Translation Copilot in academic work, please cite:
 
-> Mandour, W. (2026). *RDAT: Translation Copilot (Version 0.2.0)* [Computer software]. Sultan Qaboos University. https://doi.org/10.17605/OSF.IO/GAQ4K
+> Mandour, W. (2026). *RDAT: Translation Copilot (Version 0.2.0)* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21256765
 
 ---
 
