@@ -128,6 +128,8 @@ export function TargetEditor({
   const lastSuggestionTextRef = useRef<string>("");
   const DEVIATION_THRESHOLD = 0.6;
   const IDLE_PAUSE_MS = 2000; // Re-engage suggestions after 2s pause
+  const MIN_PREFIX_FOR_LLM = 3; // Don't call LLM for prefixes shorter than 3 chars
+  const LLM_DEBOUNCE_MS = 600; // Longer debounce for LLM calls (was 400)
 
   // Per-session toast dedup — prevents spamming the same error toast
   // on every keystroke / segment switch. Keys are error-class strings
@@ -235,7 +237,12 @@ export function TargetEditor({
 
       // ── Branch A: Active adapter (Ollama in Tauri, or WebLLM via adapter) ──
       if (adapter) {
-        if (!adapter.isModelLoaded()) {
+        // Skip LLM call for very short prefixes (less than 3 chars).
+        // Calling Ollama for every keystroke is wasteful and slow.
+        // The LTE tier (corpus matching) handles short prefixes instantly.
+        if (typedText.trim().length < MIN_PREFIX_FOR_LLM) {
+          console.log("[TargetEditor] Skipping LLM call - prefix too short:", typedText.trim().length, "chars");
+        } else if (!adapter.isModelLoaded()) {
           const reason = !loadedModelRef.current
             ? (isTauriEnvironment()
                 ? (isRTLRef.current
@@ -434,7 +441,11 @@ export function TargetEditor({
         return;
       }
       prefetchTranslation(sourceText).catch(() => {});
-      fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
+      // Only fetch suggestions on initial focus if there's already text typed.
+      // Don't call Ollama with empty text - it wastes 2-3 seconds for nothing.
+      if (translationText.trim().length >= MIN_PREFIX_FOR_LLM) {
+        fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
+      }
       return;
     }
 
@@ -456,7 +467,8 @@ export function TargetEditor({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
 
-    // Timer 1: typing debounce (400ms) - fires shortly after typing stops
+    // Timer 1: typing debounce - fires after user stops typing.
+    // Use longer debounce for LLM calls to avoid spamming Ollama.
     setEditorActivity("typing");
     debounceRef.current = setTimeout(() => {
       setEditorActivity("suggesting");
@@ -472,7 +484,7 @@ export function TargetEditor({
           fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
         }
       }, IDLE_PAUSE_MS);
-    }, 400);
+    }, LLM_DEBOUNCE_MS);
 
     return () => {
       if (debounceRef.current) {
