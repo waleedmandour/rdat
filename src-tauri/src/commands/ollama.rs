@@ -400,14 +400,11 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
 
     // Use /api/chat with messages array (more reliable than /api/generate)
     //
-    // For Qwen 3 models (thinking models), we append "/no_think" to the
-    // user prompt to disable the thinking phase.
+    // For Qwen 3 models (thinking models), use the native "think": false
+    // API parameter to disable the thinking phase. This is the official
+    // Ollama approach (https://docs.ollama.com/capabilities/thinking)
+    // and is more reliable than appending "/no_think" to the prompt.
     let is_qwen3 = req.model.contains("qwen3");
-    let user_prompt = if is_qwen3 {
-        format!("{} /no_think", req.user_prompt)
-    } else {
-        req.user_prompt.clone()
-    };
 
     // Increase max_tokens for Qwen 3 to give room for output
     let effective_max_tokens = if is_qwen3 {
@@ -420,9 +417,10 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         "model": req.model,
         "messages": [
             {"role": "system", "content": req.system_prompt},
-            {"role": "user", "content": user_prompt}
+            {"role": "user", "content": req.user_prompt}
         ],
         "stream": false,
+        "think": false,
         "options": {
             "num_predict": effective_max_tokens,
             "temperature": req.temperature,
