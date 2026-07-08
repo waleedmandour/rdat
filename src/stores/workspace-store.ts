@@ -16,18 +16,11 @@ interface WorkspaceState {
   setDirection: (direction: TranslationDirection) => void;
 }
 
-const DEFAULT_SOURCE = 
-`Computer-assisted translation (CAT), also known as computer-aided translation, is a form of language translation in which a human translator uses computer software to support and facilitate the translation process.
-
-Neural machine translation (NMT) is an approach to machine translation that uses a large artificial neural network to predict the likelihood of a sequence of words, typically modeling entire sentences in a single integrated model.
-
-At the heart of the system is the translation memory (TM). A translation memory is a database that stores segments of text that have been previously translated.
-
-Local language models on device ensure data privacy and provide fast offline terminology matching. These systems optimize student workflow efficiency.`;
+const DEFAULT_SOURCE = "";
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   sourceText: DEFAULT_SOURCE,
-  targetTexts: Array(4).fill(""),
+  targetTexts: [],
   currentSegmentIndex: 0,
   highlightedSegmentIndex: null,
   direction: "en-ar",

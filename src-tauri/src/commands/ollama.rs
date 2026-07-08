@@ -401,13 +401,7 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
     // Use /api/chat with messages array (more reliable than /api/generate)
     //
     // For Qwen 3 models (thinking models), we append "/no_think" to the
-    // user prompt to disable the thinking phase. This is critical because:
-    //   - Qwen 3 puts reasoning in "thinking" and answer in "content"
-    //   - With low max_tokens (256), the model uses ALL tokens for thinking
-    //   - "content" comes back empty, causing "empty translation" errors
-    //
-    // "/no_think" tells Qwen 3 to skip reasoning and output directly.
-    // For non-Qwen models, "/no_think" is harmless (ignored as plain text).
+    // user prompt to disable the thinking phase.
     let is_qwen3 = req.model.contains("qwen3");
     let user_prompt = if is_qwen3 {
         format!("{} /no_think", req.user_prompt)
@@ -415,9 +409,9 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         req.user_prompt.clone()
     };
 
-    // Increase max_tokens for Qwen 3 to give room for both thinking + output
+    // Increase max_tokens for Qwen 3 to give room for output
     let effective_max_tokens = if is_qwen3 {
-        std::cmp::max(req.max_tokens, 512)
+        std::cmp::max(req.max_tokens, 1024)
     } else {
         req.max_tokens
     };
@@ -528,6 +522,20 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         translation
     };
 
+    // ── Strip thinking text that leaked into content (Qwen 3) ──
+    // Even with /no_think, Qwen 3 sometimes puts reasoning in content.
+    // Common patterns: "Okay, let's...", "Let me...", "The user wants...",
+    // "I need to...", "First, let's...", "<think>...</think>"
+    //
+    // Strategy: if the text starts with English reasoning phrases (not
+    // Arabic), it's thinking text that leaked. Try to extract the Arabic
+    // portion from the end. If no Arabic found, return empty.
+    let translation = if is_qwen3 {
+        strip_thinking_from_content(&translation)
+    } else {
+        translation
+    };
+
     eprintln!(
         "[ollama_translate] Extracted translation ({} chars): '{}'",
         translation.len(),
@@ -554,4 +562,101 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         candidates: vec![translation],
         error: None,
     })
+}
+
+/// Strip thinking/reasoning text that Qwen 3 leaks into the content field.
+///
+/// Qwen 3 is supposed to put reasoning in the "thinking" field and the
+/// answer in "content". But sometimes (especially without /no_think or
+/// when /no_think is ignored), the reasoning leaks into content.
+///
+/// Patterns to detect and strip:
+///   1. "<think>...</think>" tags
+///   2. Text starting with English reasoning phrases like "Okay, let's",
+///      "Let me", "The user wants", "I need to", "First, let's"
+///   3. Any English text before the first Arabic character
+///
+/// Strategy: find the first Arabic character (Unicode range U+0600-U+06FF)
+/// and return everything from that point. If no Arabic found, return empty.
+fn strip_thinking_from_content(text: &str) -> String {
+    let trimmed = text.trim();
+
+    // If empty, return as-is
+    if trimmed.is_empty() {
+        return String::new();
+    }
+
+    // If the text starts with Arabic, it's probably fine (no thinking leaked)
+    if let Some(first_char) = trimmed.chars().next() {
+        if is_arabic_char(first_char) {
+            return trimmed.to_string();
+        }
+    }
+
+    // Strip <think>...</think> tags if present
+    let without_think_tags = if trimmed.contains("<think>") {
+        // Remove everything between <think> and </think> (inclusive)
+        let mut result = String::new();
+        let mut in_think = false;
+        let mut buffer = String::new();
+        for c in trimmed.chars() {
+            buffer.push(c);
+            if buffer.ends_with("<think>") {
+                buffer.truncate(buffer.len() - 7);
+                in_think = true;
+                buffer.clear();
+            } else if in_think && buffer.ends_with("</think>") {
+                in_think = false;
+                buffer.clear();
+            } else if !in_think {
+                // Only append non-think content
+            }
+        }
+        result + &buffer
+    } else {
+        trimmed.to_string()
+    };
+
+    // Find the first Arabic character and return everything from there
+    let cleaned = without_think_tags.trim();
+    if cleaned.is_empty() {
+        return String::new();
+    }
+
+    // Check if starts with Arabic
+    if let Some(first_char) = cleaned.chars().next() {
+        if is_arabic_char(first_char) {
+            return cleaned.to_string();
+        }
+    }
+
+    // Find first Arabic character position
+    for (idx, c) in cleaned.char_indices() {
+        if is_arabic_char(c) {
+            let result = cleaned[idx..].trim().to_string();
+            eprintln!(
+                "[ollama_translate] Stripped thinking text ({} chars), extracted Arabic ({} chars)",
+                idx,
+                result.len()
+            );
+            return result;
+        }
+    }
+
+    // No Arabic found at all - this is pure thinking text
+    eprintln!(
+        "[ollama_translate] No Arabic found in content, treating as pure thinking text (returning empty)"
+    );
+    String::new()
+}
+
+/// Check if a character is in the Arabic Unicode range (U+0600-U+06FF)
+/// or Arabic Supplement (U+0750-U+077F) or Arabic Presentation Forms
+/// (U+FB50-U+FDFF, U+FE70-U+FEFF).
+fn is_arabic_char(c: char) -> bool {
+    let code = c as u32;
+    code >= 0x0600 && code <= 0x06FF
+        || code >= 0x0750 && code <= 0x077F
+        || code >= 0xFB50 && code <= 0xFDFF
+        || code >= 0xFE70 && code <= 0xFEFF
 }
