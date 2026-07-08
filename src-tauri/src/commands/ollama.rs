@@ -399,15 +399,38 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
     );
 
     // Use /api/chat with messages array (more reliable than /api/generate)
+    //
+    // For Qwen 3 models (thinking models), we append "/no_think" to the
+    // user prompt to disable the thinking phase. This is critical because:
+    //   - Qwen 3 puts reasoning in "thinking" and answer in "content"
+    //   - With low max_tokens (256), the model uses ALL tokens for thinking
+    //   - "content" comes back empty, causing "empty translation" errors
+    //
+    // "/no_think" tells Qwen 3 to skip reasoning and output directly.
+    // For non-Qwen models, "/no_think" is harmless (ignored as plain text).
+    let is_qwen3 = req.model.contains("qwen3");
+    let user_prompt = if is_qwen3 {
+        format!("{} /no_think", req.user_prompt)
+    } else {
+        req.user_prompt.clone()
+    };
+
+    // Increase max_tokens for Qwen 3 to give room for both thinking + output
+    let effective_max_tokens = if is_qwen3 {
+        std::cmp::max(req.max_tokens, 512)
+    } else {
+        req.max_tokens
+    };
+
     let body = serde_json::json!({
         "model": req.model,
         "messages": [
             {"role": "system", "content": req.system_prompt},
-            {"role": "user", "content": req.user_prompt}
+            {"role": "user", "content": user_prompt}
         ],
         "stream": false,
         "options": {
-            "num_predict": req.max_tokens,
+            "num_predict": effective_max_tokens,
             "temperature": req.temperature,
         }
     });
@@ -454,7 +477,17 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
     };
 
     // Extract the message content from /api/chat response format:
-    // { "message": { "role": "assistant", "content": "..." }, "done": true }
+    // { "message": { "role": "assistant", "content": "...", "thinking": "..." }, "done": true }
+    //
+    // IMPORTANT: Qwen 3 models are "thinking" models. They put their
+    // reasoning into the "thinking" field and the final answer into
+    // "content". But with low max_tokens (256), the model may use ALL
+    // tokens for thinking and leave content empty.
+    //
+    // Strategy:
+    //   1. Try "content" first (normal case)
+    //   2. If empty, try "thinking" (model thought but ran out of tokens)
+    //   3. If both empty, try /api/generate "response" field (fallback)
     let translation = json
         .get("message")
         .and_then(|m| m.get("content"))
@@ -462,6 +495,26 @@ pub async fn ollama_translate(req: TranslateRequest) -> Result<TranslateResponse
         .unwrap_or("")
         .trim()
         .to_string();
+
+    // If content is empty, try the thinking field (Qwen 3 fallback)
+    let translation = if translation.is_empty() {
+        let thinking = json
+            .get("message")
+            .and_then(|m| m.get("thinking"))
+            .and_then(|t| t.as_str())
+            .unwrap_or("")
+            .trim()
+            .to_string();
+        if !thinking.is_empty() {
+            eprintln!(
+                "[ollama_translate] Content was empty, using thinking field ({} chars). Model may need more tokens or /no_think.",
+                thinking.len()
+            );
+        }
+        thinking
+    } else {
+        translation
+    };
 
     // Fallback: try /api/generate response format:
     // { "response": "...", "done": true }
