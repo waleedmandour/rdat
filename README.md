@@ -382,3 +382,7 @@ This tool supports academic researchers and professional translators working wit
 - Repository: [github.com/waleedmandour/rdat](https://github.com/waleedmandour/rdat)
 
 The development of RDAT: Translation Copilot has been performed with the assistance of multi-AI agents. The primary AI assistant used throughout the development lifecycle was **GLM 5.2** (2026) by Z.ai, which was used for code generation, architectural analysis, debugging, documentation, and visual design. Additional AI agents were consulted for code review, research synthesis, and cross-platform testing guidance.
+
+---
+
+Built with &#10084;&#65039; to the Academic Community
