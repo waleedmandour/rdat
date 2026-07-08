@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+<meta charset="UTF-8">
+<title>RDAT: مساعد الترجمة - دليل المستخدم الشامل</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cairo:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+@page {
+  size: 720px 1020px;
+  margin: 0;
+}
+:root {
+  --c-bg: #0A0B0E;
+  --c-surface: #111318;
+  --c-surface-2: #16181F;
+  --c-text: #E8E6E3;
+  --c-muted: #8B8F99;
+  --c-primary: #6366F1;
+  --c-primary-dim: #4F46E5;
+  --c-emerald: #10B981;
+  --c-amber: #F59E0B;
+  --c-rose: #F43F5E;
+  --c-blue: #3B82F6;
+  --c-border: rgba(255, 255, 255, 0.08);
+}
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 720px;
+  background: var(--c-bg);
+  color: var(--c-text);
+  font-family: 'Cairo', 'Inter', 'Noto Sans Arabic', sans-serif;
+  font-size: 13px;
+  line-height: 1.6;
+  direction: rtl;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+@media screen {
+  html {
+    height: auto;
+    display: flex;
+    justify-content: center;
+    background: #1a1a1a;
+  }
+  body {
+    margin: 20px auto;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+  }
+}
+
+/* ===== Cover page ===== */
+.cover {
+  width: 720px;
+  height: 1020px;
+  box-sizing: border-box;
+  break-after: page;
+  overflow: hidden;
+  position: relative;
+  background:
+    radial-gradient(circle at 15% 15%, rgba(99, 102, 241, 0.18) 0%, transparent 45%),
+    radial-gradient(circle at 85% 85%, rgba(16, 185, 129, 0.12) 0%, transparent 45%),
+    var(--c-bg);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  padding: 70px 65px;
+}
+.cover::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 4px;
+  background: linear-gradient(270deg, var(--c-primary) 0%, var(--c-emerald) 100%);
+}
+.cover-icon {
+  width: 140px;
+  height: 140px;
+  margin-bottom: 32px;
+  border-radius: 28px;
+  box-shadow: 0 20px 60px rgba(99, 102, 241, 0.3);
+  display: block;
+}
+.cover-tag {
+  font-family: 'Cairo', sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0;
+  color: var(--c-primary);
+  margin-bottom: 20px;
+}
+.cover-title {
+  font-size: 52px;
+  font-weight: 900;
+  line-height: 1.1;
+  letter-spacing: 0;
+  margin: 0 0 14px 0;
+  text-align: center;
+  background: linear-gradient(180deg, #FFFFFF 0%, #B8BCC8 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+.cover-title-line1 {
+  display: block;
+  font-family: 'Inter', sans-serif;
+  font-size: 72px;
+  margin-bottom: 6px;
+  letter-spacing: -2px;
+}
+.cover-title-line2 {
+  display: block;
+  font-size: 40px;
+  font-weight: 800;
+  color: var(--c-primary);
+  -webkit-text-fill-color: var(--c-primary);
+  letter-spacing: 0;
+}
+.cover-subtitle {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--c-muted);
+  line-height: 1.6;
+  margin: 14px 0 30px 0;
+  max-width: 540px;
+  text-align: center;
+}
+.cover-subtitle .ver {
+  color: var(--c-emerald);
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+}
+.cover-meta {
+  display: flex;
+  gap: 24px;
+  margin-top: 10px;
+  padding-top: 24px;
+  border-top: 1px solid var(--c-border);
+  width: 100%;
+  max-width: 540px;
+}
+.cover-meta-item {
+  flex: 1;
+  text-align: center;
+}
+.cover-meta-label {
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--c-muted);
+  margin-bottom: 6px;
+}
+.cover-meta-value {
+  font-family: 'Inter', sans-serif;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text);
+  direction: ltr;
+  unicode-bidi: embed;
+}
+.cover-badge {
+  position: absolute;
+  top: 70px;
+  left: 65px;
+  padding: 8px 14px;
+  background: rgba(99, 102, 241, 0.15);
+  border: 1px solid rgba(99, 102, 241, 0.4);
+  border-radius: 6px;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--c-primary);
+  letter-spacing: 1px;
+  direction: ltr;
+}
+.cover-footer {
+  position: absolute;
+  bottom: 40px;
+  left: 65px;
+  right: 65px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  color: var(--c-muted);
+}
+.cover-footer .ltr {
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+/* ===== Content pages ===== */
+.main-content {
+  padding: 38px 50px 24px 50px;
+  break-after: page;
+  page-break-after: always;
+}
+.main-content:last-of-type {
+  break-after: auto;
+  page-break-after: auto;
+}
+.section-tag {
+  font-family: 'Cairo', sans-serif;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  color: var(--c-primary);
+  margin-bottom: 6px;
+}
+.section-title {
+  font-size: 21px;
+  font-weight: 800;
+  color: var(--c-text);
+  letter-spacing: 0;
+  margin: 0 0 5px 0;
+}
+.divider {
+  height: 2px;
+  width: 36px;
+  background: var(--c-primary);
+  margin-bottom: 10px;
+}
+.body-text {
+  font-size: 12px;
+  line-height: 1.7;
+  color: var(--c-text);
+  margin: 0 0 8px 0;
+}
+.body-text .en {
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+  font-weight: 600;
+}
+.chapter-header {
+  break-after: avoid;
+  break-inside: avoid;
+  margin-top: 14px;
+}
+.chapter-header:first-child { margin-top: 0; }
+
+/* ===== Steps ===== */
+.step {
+  break-inside: avoid;
+  margin-bottom: 8px;
+  padding: 8px 13px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-right: 3px solid var(--c-primary);
+  border-radius: 6px;
+}
+.step-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 3px;
+  flex-direction: row;
+}
+.step-num {
+  width: 22px;
+  height: 22px;
+  background: var(--c-primary);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  font-weight: 800;
+  font-family: 'Inter', sans-serif;
+  flex-shrink: 0;
+}
+.step-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--c-text);
+}
+.step-body {
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--c-muted);
+  padding-right: 32px;
+}
+.step-body code {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--c-surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--c-emerald);
+  font-size: 10.5px;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+.step-body .en {
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+  font-weight: 600;
+  color: var(--c-text);
+}
+
+/* ===== Tier table ===== */
+.tier-table {
+  break-inside: avoid;
+  margin-top: 8px;
+  border: 1px solid var(--c-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.tier-row {
+  display: grid;
+  grid-template-columns: 95px 1fr 95px;
+  align-items: center;
+  padding: 7px 14px;
+  border-bottom: 1px solid var(--c-border);
+  font-size: 10.5px;
+  line-height: 1.55;
+}
+.tier-row:last-child { border-bottom: none; }
+.tier-row.header {
+  background: var(--c-surface-2);
+  font-family: 'Cairo', sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--c-muted);
+}
+.tier-row.header > div:nth-child(3) {
+  text-align: center;
+}
+.tier-row > div:nth-child(3) {
+  font-family: 'Inter', sans-serif;
+  font-size: 10.5px;
+  color: var(--c-muted);
+  text-align: center;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+.tier-badge {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 4px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  font-weight: 700;
+  text-align: center;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+.tier-lte { background: rgba(16, 185, 129, 0.2); color: var(--c-emerald); }
+.tier-llm { background: rgba(99, 102, 241, 0.2); color: var(--c-primary); }
+.tier-gemini { background: rgba(245, 158, 11, 0.2); color: var(--c-amber); }
+
+/* ===== Keyboard shortcuts grid ===== */
+.kbd-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+.kbd-item {
+  break-inside: avoid;
+  padding: 8px 8px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+}
+.kbd-key {
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 9.5px;
+  font-weight: 700;
+  background: var(--c-surface-2);
+  border: 1px solid var(--c-border);
+  padding: 3px 6px;
+  border-radius: 3px;
+  color: var(--c-primary);
+  text-align: center;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+.kbd-action {
+  font-size: 10.5px;
+  color: var(--c-text);
+  font-weight: 500;
+  text-align: center;
+  line-height: 1.3;
+}
+
+/* ===== Tips / Warnings ===== */
+.tip {
+  break-inside: avoid;
+  margin-top: 9px;
+  padding: 9px 13px;
+  background: rgba(16, 185, 129, 0.08);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--c-text);
+}
+.tip strong { color: var(--c-emerald); }
+
+.warn {
+  break-inside: avoid;
+  margin-top: 9px;
+  padding: 9px 13px;
+  background: rgba(245, 158, 11, 0.08);
+  border: 1px solid rgba(245, 158, 11, 0.25);
+  border-radius: 6px;
+  font-size: 11px;
+  line-height: 1.65;
+  color: var(--c-text);
+}
+.warn strong { color: var(--c-amber); }
+.warn code {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--c-surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--c-emerald);
+  font-size: 10.5px;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+/* ===== Feature list ===== */
+.feature-list {
+  break-inside: avoid;
+  margin-top: 8px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+.feature-item {
+  padding: 7px 11px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  font-size: 10.5px;
+  color: var(--c-text);
+  line-height: 1.55;
+}
+.feature-item strong { color: var(--c-primary); }
+.feature-item .en {
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+  font-weight: 600;
+}
+
+/* ===== Diagnostics box ===== */
+.diag-box {
+  break-inside: avoid;
+  margin-top: 8px;
+  padding: 10px 12px;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1px solid var(--c-border);
+  border-radius: 5px;
+  font-family: 'JetBrains Mono', monospace;
+  font-size: 10px;
+  color: var(--c-muted);
+  line-height: 1.7;
+  direction: ltr;
+  text-align: left;
+}
+.diag-box .ok { color: var(--c-emerald); }
+.diag-box .fail { color: var(--c-rose); }
+.diag-box .label {
+  color: var(--c-muted);
+  display: block;
+  margin-bottom: 4px;
+}
+
+/* ===== Contact card ===== */
+.contact-card {
+  break-inside: avoid;
+  margin-top: 10px;
+  padding: 14px 16px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-right: 3px solid var(--c-primary);
+  border-radius: 8px;
+}
+.contact-name {
+  font-size: 16px;
+  font-weight: 800;
+  color: var(--c-text);
+  margin-bottom: 2px;
+}
+.contact-role {
+  font-size: 11.5px;
+  color: var(--c-muted);
+  margin-bottom: 10px;
+}
+.contact-links {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.contact-link {
+  font-family: 'Cairo', sans-serif;
+  font-size: 11.5px;
+  color: var(--c-primary);
+  text-decoration: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.contact-link a {
+  color: var(--c-primary);
+  text-decoration: none;
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+.contact-link-label {
+  color: var(--c-muted);
+  font-weight: 500;
+  min-width: 80px;
+}
+
+/* ===== Citation box ===== */
+.citation-box {
+  break-inside: avoid;
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-right: 3px solid var(--c-emerald);
+  border-radius: 8px;
+}
+.citation-label {
+  font-family: 'Cairo', sans-serif;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--c-emerald);
+  margin-bottom: 6px;
+}
+.citation-text {
+  font-size: 11px;
+  line-height: 1.75;
+  color: var(--c-text);
+  direction: ltr;
+  text-align: left;
+  font-family: 'Inter', sans-serif;
+}
+.citation-text a {
+  color: var(--c-primary);
+  text-decoration: none;
+}
+
+/* ===== Acknowledgements ===== */
+.ack-section {
+  break-inside: avoid;
+  margin-top: 10px;
+  padding: 12px 14px;
+  background: var(--c-surface);
+  border: 1px solid var(--c-border);
+  border-radius: 8px;
+}
+.ack-title {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--c-text);
+  margin-bottom: 6px;
+}
+.ack-text {
+  font-size: 10.5px;
+  line-height: 1.65;
+  color: var(--c-muted);
+}
+.ack-text strong { color: var(--c-text); }
+.ack-text .en {
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+  font-weight: 600;
+}
+
+/* ===== Footer ===== */
+.page-footer {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid var(--c-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: 'Inter', sans-serif;
+  font-size: 10px;
+  color: var(--c-muted);
+  letter-spacing: 1px;
+}
+.page-footer .ar {
+  font-family: 'Cairo', sans-serif;
+  letter-spacing: 0;
+  font-weight: 500;
+}
+.page-footer .num {
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+
+/* Inline code in body text */
+.body-text code {
+  font-family: 'JetBrains Mono', monospace;
+  background: var(--c-surface-2);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--c-emerald);
+  font-size: 10.5px;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+.body-text strong {
+  color: var(--c-text);
+  font-weight: 700;
+}
+.body-text .ltr {
+  font-family: 'Inter', sans-serif;
+  direction: ltr;
+  unicode-bidi: embed;
+}
+</style>
+</head>
+<body>
+
+<!-- ============================================================= -->
+<!-- PAGE 1: COVER                                                  -->
+<!-- ============================================================= -->
+<div class="cover">
+  <div class="cover-badge">v0.2.0</div>
+
+  <svg class="cover-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="140" height="140" role="img" aria-label="RDAT logo">
+    <defs>
+      <linearGradient id="iconBg" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#4F46E5"/>
+        <stop offset="100%" stop-color="#10B981"/>
+      </linearGradient>
+    </defs>
+    <rect width="256" height="256" rx="56" fill="url(#iconBg)"/>
+    <text x="128" y="138" text-anchor="middle"
+          font-family="Inter, Arial, sans-serif" font-size="72" font-weight="900" fill="#FFFFFF" letter-spacing="-3">RDAT</text>
+    <g stroke="#FFFFFF" stroke-width="6" fill="none" stroke-linecap="round" stroke-linejoin="round" opacity="0.92">
+      <path d="M 72 178 L 184 178"/>
+      <path d="M 174 170 L 184 178 L 174 186"/>
+      <path d="M 184 198 L 72 198"/>
+      <path d="M 82 190 L 72 198 L 82 206"/>
+    </g>
+  </svg>
+
+  <div class="cover-tag">دليل المستخدم الشامل</div>
+  <h1 class="cover-title">
+    <span class="cover-title-line1">RDAT</span>
+    <span class="cover-title-line2">مساعد الترجمة</span>
+  </h1>
+  <p class="cover-subtitle">
+    بيئة احترافية للترجمة بمساعدة الحاسوب من الإنجليزية إلى العربية،<br>
+    مدعومة بخط أنابيب تنبؤي ثلاثي الطبقات ونماذج لغة محلية.
+    <br><span class="ver">الإصدار 0.2.0</span>
+  </p>
+
+  <div class="cover-meta">
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">المحرك</div>
+      <div class="cover-meta-value">Ollama + Gemma 4</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">المنصات</div>
+      <div class="cover-meta-value">Win / macOS / Linux</div>
+    </div>
+    <div class="cover-meta-item">
+      <div class="cover-meta-label">الرخصة</div>
+      <div class="cover-meta-value">MIT</div>
+    </div>
+  </div>
+
+  <div class="cover-footer">
+    <span>د. وليد مندور، جامعة السلطان قابوس، سلطنة عُمان</span>
+    <span class="ltr">waleedmandour.org</span>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- PAGE 2: INTRODUCTION + INSTALL OLLAMA                          -->
+<!-- ============================================================= -->
+<div class="main-content">
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الأول</div>
+    <h2 class="section-title">مقدمة</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    <strong>RDAT: مساعد الترجمة</strong> <span class="en">(Translation Copilot)</span> هو بيئة عمل للترجمة بمساعدة الحاسوب <span class="en">(CAT)</span> مدعومة بالذكاء الاصطناعي، صُمّمت خصيصًا لسير عمل الترجمة من الإنجليزية إلى العربية. يجمع التطبيق بين محرّر ترجمة مجزّأ <span class="en">(segmented editor)</span> وخط أنابيب تنبؤي ثلاثي الطبقات <span class="en">(three-tier predictive pipeline)</span> يقدّم اقتراحات آنية على هيئة نص شبحي <span class="en">(ghost-text)</span> مع إبقاء المترجم في تحكّم كامل بكلّ كلمة.
+  </p>
+
+  <p class="body-text">
+    يقوم النظام على مبدأ أنّ المترجم المحترف لا ينبغي أن يضطرّ إلى الاختيار بين السرعة والجودة. تظهر الاقتراحات سطرًا بسطر أثناء الكتابة، مستمدّة من طبقات متدرّجة في الذكاء توازن بين زمن الاستجابة والدقة: بدءًا من المطابقة الفورية مع المدوّنات اللغوية، مرورًا بإكمالات نماذج اللغة الكبيرة المُثراة بالتوليد المعزّز بالاسترجاع <span class="en">(RAG)</span> التي تحترم المصطلحات المُحمّلة، وانتهاءً بترجمات <span class="en">Gemini</span> السحابية للمقاطع المعقّدة أو الغامضة.
+  </p>
+
+  <p class="body-text">
+    اعتبارًا من الإصدار 0.2.0، يأتي التطبيق في صيغتين متكاملتين تشتركان في واجهة <span class="en">React</span> الأمامية نفسها. تطبيق سطح المكتب المبني على <span class="en">Tauri</span> (لأنظمة <span class="en">Windows</span> و<span class="en">macOS</span> و<span class="en">Linux</span>) يستخدم <span class="en">Ollama</span> بوصفه محرّك نماذج اللغة الكبيرة المحلي الأساسي. أمّا نسخة تطبيق الويب التقدّمي <span class="en">(PWA)</span> المستضافة على <span class="en">Vercel</span> فتعمل في المتصفّح مع إمكانية استخدام <span class="en">WebLLM</span> عبر <span class="en">WebGPU</span>. يشترك المساران في المحرّر وقاعدة المصطلحات وخط الأنابيب ثلاثي الطبقات نفسه.
+  </p>
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الثاني</div>
+    <h2 class="section-title">تثبيت Ollama وجلب النموذج الأول</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    يستخدم التطبيق <span class="en">Ollama</span> بوصفه محرّك نماذج اللغة الكبيرة المحلي الأساسي. يعمل <span class="en">Ollama</span> بالكامل على جهازك، فلا تغادر أيّ بيانات جهازك. اتّبع الخطوات التالية لتشغيل أوّل نموذج لك.
+  </p>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">1</div>
+      <div class="step-title">تنزيل وتثبيت Ollama</div>
+    </div>
+    <div class="step-body">
+      توجّه إلى <code>ollama.com/download</code> ونزّل المُثبّت الخاص بنظامك. شغّل المُثبّت. في نظامَي <span class="en">Windows</span> و<span class="en">macOS</span>، يبدأ <span class="en">Ollama</span> تلقائيًا. أمّا في <span class="en">Linux</span> فنفّذ الأمر <code>ollama serve</code> في الطرفية.
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">2</div>
+      <div class="step-title">تشغيل التطبيق والتحقق من Ollama</div>
+    </div>
+    <div class="step-body">
+      افتح تطبيق <strong>RDAT</strong> على سطح المكتب. عند أوّل تشغيل، تظهر نافذة ترحيب <span class="en">(onboarding)</span> للتحقق من أنّ <span class="en">Ollama</span> قيد التشغيل. انقر على <strong>التحقق الآن</strong> <span class="en">(Check now)</span>. عند النجاح، تُغلق النافذة تلقائيًا. إذا تخطّيتها، يعمل التطبيق في وضع محدود يقتصر على طبقة <span class="en">LTE</span> فقط.
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">3</div>
+      <div class="step-title">جلب نموذج Gemma 4 E2B (الموصى به للمبتدئين)</div>
+    </div>
+    <div class="step-body">
+      افتح لوحة <strong>النماذج</strong> <span class="en">(Models)</span> من الشريط الجانبي. انقر على زرّ <strong>الجلب</strong> <span class="en">(Pull)</span> بجانب <code>gemma4:e2b</code>. يستغرق تنزيل 1.5 غيغابايت من دقيقتين إلى عشر دقائق حسب سرعة اتصالك. يظهر شريط تقدّم للحالة المباشرة. بدائل أكبر: <code>gemma4:e4b</code> (3 غيغابايت، جودة أعلى) أو <code>qwen3:4b</code> (2.5 غيغابايت، متوازن).
+    </div>
+  </div>
+
+  <div class="step">
+    <div class="step-header">
+      <div class="step-num">4</div>
+      <div class="step-title">تحميل النموذج</div>
+    </div>
+    <div class="step-body">
+      بعد اكتمال الجلب، انقر على زرّ <strong>التحميل</strong> <span class="en">(Load)</span> على البطاقة نفسها. يتحوّل شريط الحالة في الأعلى إلى اللون الأخضر ويُظهر النصّ <code>Active model: gemma4:e2b</code>. يبقى النموذج مُحمّلًا لمدّة 5 دقائق من الخمول (وهو الإعداد الافتراضي لـ <span class="en">Ollama</span>).
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>تنبيه:</strong> إذا تخطّيت تثبيت <span class="en">Ollama</span>، يظلّ التطبيق يعمل، لكنّ طبقة <span class="en">LTE</span> (مطابقة المدوّنة) وحدها ستُنتج اقتراحات. لتمكين طبقة نماذج اللغة الكبيرة المحلية، ثبّت <span class="en">Ollama</span> وحمّل نموذجًا.
+  </div>
+
+  <div class="page-footer">
+    <span class="ar">RDAT: مساعد الترجمة / الإصدار 0.2.0 / دليل المستخدم</span>
+    <span class="num">صفحة 2</span>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- PAGE 3: TRANSLATION WORKFLOW + KEYBOARD SHORTCUTS              -->
+<!-- ============================================================= -->
+<div class="main-content">
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الثالث</div>
+    <h2 class="section-title">سير عمل الترجمة</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    انقر على زرّ <strong>تشغيل المحرّر</strong> <span class="en">(Launch Editor)</span> من لوحة المعلومات. الصق النصّ الإنجليزي المصدر في اللوحة اليمنى، حيث يُقسَّم النصّ تلقائيًا إلى مقاطع <span class="en">(segments)</span>. انقر على أيّ مقطع في اللوحة اليسرى لبدء الترجمة. أثناء كتابتك بالعربية، تظهر اقتراحات النصّ الشبحي <span class="en">(ghost-text)</span> سطرًا مع شارة ملوّنة تُظهر مصدر الطبقة المُولّدة للاقتراح.
+  </p>
+
+  <p class="body-text">
+    يضمّ التطبيق خط أنابيب تنبؤيًا ثلاثي الطبقات <span class="en">(three-tier pipeline)</span>، يستشير كلّ طبقة بالترتيب. أوّل طبقة تُرجع نتيجة واثقة تُمدّ النصّ الشبحي. إذا كانت طبقة أعلى زمنًا في طور الحساب، تستبدل اقتراحها الاقتراح الحالي عند وصولها، ممّا يتيح التحسين التدريجي دون إعاقة تدفّق الكتابة.
+  </p>
+
+  <div class="tier-table">
+    <div class="tier-row header">
+      <div>الشارة</div>
+      <div>طبقة المصدر</div>
+      <div>زمن الاستجابة</div>
+    </div>
+    <div class="tier-row">
+      <div><span class="tier-badge tier-lte">LTE</span></div>
+      <div>محرك الترجمة المحلي <span class="ltr">(Local Translation Engine)</span>: مطابقة فورية مع المدوّنة باستخدام قائمة مصطلحاتك والمدوّنة الأولية المُدمجة (نحو 80 زوجًا إنجليزي/عربي).</div>
+      <div>&lt; 5 ms</div>
+    </div>
+    <div class="tier-row">
+      <div><span class="tier-badge tier-llm">GEMMA4</span></div>
+      <div>نموذج لغة كبير محلي عبر <span class="ltr">Ollama</span>: مُثرى بالتوليد المعزّز بالاسترجاع <span class="ltr">(RAG)</span> ومراعٍ للمصطلحات. هذا هو المحرّك الأساسي للمشروع.</div>
+      <div>200 to 2000 ms</div>
+    </div>
+    <div class="tier-row">
+      <div><span class="tier-badge tier-gemini">GEMINI</span></div>
+      <div>سحابي احتياطي عبر <span class="ltr">Gemini 2.5 Flash</span>. اختياري، يتطلّب مفتاح <span class="ltr">API</span> خاصًا بك.</div>
+      <div>500 to 3000 ms</div>
+    </div>
+  </div>
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الرابع</div>
+    <h2 class="section-title">اختصارات لوحة المفاتيح</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    تتحكّم الاختصارات التالية في قبول الاقتراحات ورفضها والتنقّل بين المقاطع. تعمل جميعها أثناء تحرير المقطع النشط في المحرّر.
+  </p>
+
+  <div class="kbd-grid">
+    <div class="kbd-item">
+      <div class="kbd-key">Tab</div>
+      <div class="kbd-action">قبول الاقتراح كاملًا</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Ctrl + Right</div>
+      <div class="kbd-action">قبول الكلمة التالية</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Alt + ]</div>
+      <div class="kbd-action">تصفّح المرشّحات</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Esc</div>
+      <div class="kbd-action">رفض الاقتراح</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Ctrl + Enter</div>
+      <div class="kbd-action">تأكيد المقطع</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Alt + [</div>
+      <div class="kbd-action">المرشّح السابق</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Click</div>
+      <div class="kbd-action">تركيز المقطع</div>
+    </div>
+    <div class="kbd-item">
+      <div class="kbd-key">Volume</div>
+      <div class="kbd-action">نطق الترجمة</div>
+    </div>
+  </div>
+
+  <div class="tip">
+    <strong>تلميح:</strong> اضغط <code>Tab</code> لقبول الاقتراح كاملًا عند ظهوره، أو اضغط <code>Ctrl + Right</code> لقبول كلمة واحدة فقط في كل مرّة إذا أردت مراجعة الترجمة كلمة بكلمة. هذا يحقّق توازنًا مثاليًا بين السرعة والدقّة.
+  </div>
+
+  <div class="page-footer">
+    <span class="ar">RDAT: مساعد الترجمة / الإصدار 0.2.0 / دليل المستخدم</span>
+    <span class="num">صفحة 3</span>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- PAGE 4: AI MODELS PANEL + TROUBLESHOOTING                      -->
+<!-- ============================================================= -->
+<div class="main-content">
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الخامس</div>
+    <h2 class="section-title">لوحة النماذج الذكية</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    تُعدّ لوحة النماذج <span class="en">(Models Panel)</span> مركز التحكّم في محرّك نماذج اللغة الكبيرة المحلي. تُظهر المحوّل النشط <span class="en">(active adapter)</span> (<span class="en">Ollama</span> في وضع سطح المكتب، <span class="en">WebLLM</span> في وضع المتصفّح)، وتعرض قائمة بالنماذج المتاحة، وتتيح جلبها وتحميلها وإزالتها.
+  </p>
+
+  <div class="feature-list">
+    <div class="feature-item"><strong>شريط الحالة:</strong> <span class="en">(Status Banner)</span> أخضر عند الاتصال، كهرماني عند عدم التشغيل.</div>
+    <div class="feature-item"><strong>كتالوج النماذج:</strong> <span class="en">(Model Catalog)</span> <span class="en">Gemma 4 E2B</span> و<span class="en">E4B</span> و<span class="en">Qwen 3</span> و<span class="en">Llama 4</span>.</div>
+    <div class="feature-item"><strong>زرّ الجلب:</strong> <span class="en">(Pull)</span> ينزّل نموذجًا من سجلّ <span class="en">Ollama</span>.</div>
+    <div class="feature-item"><strong>زرّ التحميل:</strong> <span class="en">(Load)</span> يضبط النموذج المنزّل بوصفه نشطًا.</div>
+    <div class="feature-item"><strong>زرّ الإزالة:</strong> <span class="en">(Remove)</span> يحذف نموذجًا من التخزين المحلي.</div>
+    <div class="feature-item"><strong>زرّ إعادة الفحص:</strong> <span class="en">(Recheck)</span> يعيد فحص <span class="en">Ollama</span> إذا كان قد بدأ للتوّ.</div>
+  </div>
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم السادس</div>
+    <h2 class="section-title">استكشاف الأخطاء وإصلاحها</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    إذا أظهر التطبيق رسالة <span class="en">"No local engine available"</span> (لا يتوفّر محرّك محلي) رغم تثبيت <span class="en">Ollama</span>، ستُظهر لوحة التشخيص الجديدة <span class="en">(diagnostics panel)</span> ما تمّ تجربته ولماذا فشل. إليك كيفية قراءتها وإصلاح المشكلات الشائعة.
+  </p>
+
+  <div class="diag-box">
+    <span class="label">// Diagnostics: Ollama detection</span>
+    <span class="fail">[x]</span> http://127.0.0.1:11434/api/tags  (Connection refused)<br>
+    <span class="fail">[x]</span> http://localhost:11434/api/tags   (Connection refused)<br>
+    <br>
+    <span class="ok">[v]</span> http://127.0.0.1:11434/api/tags  (Success)
+  </div>
+
+  <div class="warn">
+    <strong>رفض الاتصال <span class="ltr">(Connection refused):</span></strong> <span class="en">Ollama</span> لا يعمل. افتح تطبيق <span class="en">Ollama</span> من قائمة ابدأ <span class="en">(Start Menu)</span> في <span class="en">Windows</span>، أو من مجلّد التطبيقات <span class="en">(Applications)</span> في <span class="en">macOS</span>، أو نفّذ <code>ollama serve</code> في الطرفية <span class="en">(Linux)</span>.
+  </div>
+
+  <div class="warn">
+    <strong>انتهاء المهلة <span class="ltr">(Timeout):</span></strong> <span class="en">Ollama</span> يعمل لكنّه بطيء في الاستجابة. انقر على زرّ <strong>إعادة الفحص</strong> <span class="en">(Recheck)</span> بعد بضع ثوانٍ. يُعيد التطبيق المحاولة تلقائيًا مرّة واحدة بعد 3 ثوانٍ عند الإطلاق الأوّل لمعالجة سباقات البدء البارد <span class="en">(cold-start races)</span>.
+  </div>
+
+  <div class="warn">
+    <strong>الوكيل المؤسّسي أو الشبكة الافتراضية الخاصة <span class="ltr">(Corporate proxy / VPN):</span></strong> إذا كان لديك <code>HTTP_PROXY</code> مضبوط أو شبكة افتراضية خاصة <span class="en">(VPN)</span> مؤسّسية، يتجاوز التطبيق الوكلاء <span class="en">(proxies)</span> لحركة المرور الاسترجاعية <span class="en">(loopback traffic)</span> تلقائيًا. لا حاجة لأيّ إجراء.
+  </div>
+
+  <div class="tip">
+    <strong>لقطات شاشة التشخيص:</strong> إذا أبلغت عن مشكلة، أرفق لقطة شاشة لصندوق التشخيص. يُظهر بدقّة عناوين <span class="en">URL</span> التي جرّبتها والأخطاء التي حدثت، ممّا يجعل التشخيص عن بُعد ممكنًا.
+  </div>
+
+  <div class="page-footer">
+    <span class="ar">RDAT: مساعد الترجمة / الإصدار 0.2.0 / دليل المستخدم</span>
+    <span class="num">صفحة 4</span>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- PAGE 5: ENGINE SETTINGS + GLOSSARY + DOCX IMPORT               -->
+<!-- ============================================================= -->
+<div class="main-content">
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم السابع</div>
+    <h2 class="section-title">أوضاع المحرّك</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    تتوفّر ثلاثة أوضاع للمحرّك <span class="en">(Engine Modes)</span> عبر قسم الإعدادات في لوحة النماذج. يحدّد الوضع أيّ الطبقات تُستشار في خط الأنابيب التنبؤي.
+  </p>
+
+  <div class="tier-table">
+    <div class="tier-row header">
+      <div>الوضع</div>
+      <div>الطبقات النشطة</div>
+      <div>الأنسب لـ</div>
+    </div>
+    <div class="tier-row">
+      <div><strong>هجين</strong><br><span class="ltr">(Hybrid)</span></div>
+      <div><span class="ltr">LTE + Local LLM + Gemini</span></div>
+      <div>أقصى جودة مع تحوّل أنيق (موصى به)</div>
+    </div>
+    <div class="tier-row">
+      <div><strong>محلي</strong><br><span class="ltr">(Local)</span></div>
+      <div><span class="ltr">LTE + Local LLM</span> فقط</div>
+      <div>صفر تسريب بيانات، عمل كامل دون اتصال، حسّاسية للخصوصية</div>
+    </div>
+    <div class="tier-row">
+      <div><strong>سحابي</strong><br><span class="ltr">(Cloud)</span></div>
+      <div><span class="ltr">Gemini API</span> فقط</div>
+      <div>المقاطع المعقّدة، أو عند عدم توفّر نموذج محلي</div>
+    </div>
+  </div>
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الثامن</div>
+    <h2 class="section-title">إدارة المصطلحات وقاعدة البيانات اللغوية</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    تتيح لوحة المصطلحات <span class="en">(Glossary Panel)</span> استيراد قواعد البيانات المصطلحية وتصفّحها وإدارتها. تخدم المدخلات المُحمّلة غرضين: تُفهرَس في محرّك الترجمة المحلي <span class="en">(LTE)</span> للمطابقة الفورية، وتوفّر سياق الاسترجاع <span class="en">(RAG context)</span> لطبقة نماذج اللغة الكبيرة المحلية، فتحترم ترجماتك المصطلحات الخاصة بالمجال.
+  </p>
+
+  <div class="feature-list">
+    <div class="feature-item"><strong>استيراد JSON:</strong> <span class="en">(JSON Import)</span> تحميل ملفّات مصطلحات مخصّصة بصيغة <span class="en">JSON</span>.</div>
+    <div class="feature-item"><strong>المدوّنة الأولية:</strong> <span class="en">(Seed Corpus)</span> 80 زوجًا إنجليزي/عربي مُحمّلة مسبقًا في مجالات الترجمة بمساعدة الحاسوب والتقنية والأكاديميات والقانون.</div>
+    <div class="feature-item"><strong>تخزين IndexedDB:</strong> جميع البيانات تُحفظ محليًا عبر الجلسات.</div>
+    <div class="feature-item"><strong>تكامل RAG:</strong> تُحقن أعلى 5 مدخلات ذات صلة في مطالبات نموذج اللغة الكبيرة <span class="en">(LLM prompts)</span>.</div>
+  </div>
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم التاسع</div>
+    <h2 class="section-title">استيراد المستندات واتّجاه الترجمة</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    يستورد التطبيق مستندات بصيغة <span class="en">.docx</span> مباشرة إلى المحرّر. عند الاستيراد، يُحلَّل المستند تلقائيًا إلى مقاطع جاهزة للترجمة <span class="en">(segments)</span>، مع الحفاظ على ترقيم الفقرات والتنسيق الأساسي. كما يدعم التطبيق تبديل اتّجاه الترجمة بين الإنجليزية إلى العربية <span class="en">(EN to AR)</span> والعربية إلى الإنجليزية <span class="en">(AR to EN)</span> من شريط الأدوات، ممّا يجعله مناسبًا للمترجمين الذين يعملون في كلا الاتّجاهين.
+  </p>
+
+  <div class="tip">
+    <strong>ملاحظة:</strong> عند استيراد ملفّ <span class="en">.docx</span>، يُحتفظ بالبنية المنطقية للمستند (العناوين، الفقرات، القوائم) لتسهيل التصدير اللاحق. لا تُعدّل أيّ بيانات على الملفّ الأصلي.
+  </div>
+
+  <div class="page-footer">
+    <span class="ar">RDAT: مساعد الترجمة / الإصدار 0.2.0 / دليل المستخدم</span>
+    <span class="num">صفحة 5</span>
+  </div>
+</div>
+
+<!-- ============================================================= -->
+<!-- PAGE 6: CONTACT + CITATION + ACKNOWLEDGEMENTS                  -->
+<!-- ============================================================= -->
+<div class="main-content">
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم العاشر</div>
+    <h2 class="section-title">التواصل والدعم</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    تطوير <strong>RDAT: مساعد الترجمة</strong> بإشراف الدكتور وليد مندور، أستاذ مساعد بجامعة السلطان قابوس في سلطنة عُمان. للاستفسارات أو الملاحظات أو التعاون الأكاديمي، يُرجى استخدام بيانات التواصل أدناه.
+  </p>
+
+  <div class="contact-card">
+    <div class="contact-name">الدكتور وليد مندور</div>
+    <div class="contact-role">أستاذ مساعد، جامعة السلطان قابوس، سلطنة عُمان</div>
+    <div class="contact-links">
+      <span class="contact-link">
+        <span class="contact-link-label">البريد:</span>
+        <a href="mailto:w.abumandour@squ.edu.om">w.abumandour@squ.edu.om</a>
+      </span>
+      <span class="contact-link">
+        <span class="contact-link-label">الموقع:</span>
+        <a href="https://waleedmandour.org">waleedmandour.org</a>
+      </span>
+      <span class="contact-link">
+        <span class="contact-link-label">ORCID:</span>
+        <a href="https://orcid.org/0000-0002-9262-5993">0000-0002-9262-5993</a>
+      </span>
+      <span class="contact-link">
+        <span class="contact-link-label">DOI:</span>
+        <a href="https://doi.org/10.5281/zenodo.21256765">doi.org/10.5281/zenodo.21256765</a>
+      </span>
+    </div>
+  </div>
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الحادي عشر</div>
+    <h2 class="section-title">الاقتباس الأكاديمي</h2>
+    <div class="divider"></div>
+  </div>
+
+  <p class="body-text">
+    إذا استخدمت هذا البرنامج في عمل أكاديمي، يُرجى اقتباسه باستخدام معرّف الكائن الرقمي <span class="en">(DOI)</span> المُدرج أدناه، وذلك وفق صيغة الجمعية الأمريكية لعلم النفس <span class="en">(APA, 7th Edition)</span>.
+  </p>
+
+  <div class="citation-box">
+    <div class="citation-label">APA Citation (7th Edition)</div>
+    <div class="citation-text">
+      Mandour, W. (2026). <em>RDAT: Translation Copilot (Version 0.2.0)</em> [Computer software]. Sultan Qaboos University. <a href="https://doi.org/10.5281/zenodo.21256765">https://doi.org/10.5281/zenodo.21256765</a>
+    </div>
+  </div>
+
+  <div class="chapter-header">
+    <div class="section-tag">القسم الثاني عشر</div>
+    <h2 class="section-title">شكر وتقدير</h2>
+    <div class="divider"></div>
+  </div>
+
+  <div class="ack-section">
+    <div class="ack-title">التطوير بمساعدة الذكاء الاصطناعي</div>
+    <div class="ack-text">
+      أُنجز تطوير <strong>RDAT: مساعد الترجمة</strong> بمساعدة وكلاء ذكاء اصطناعي متعدّدين. كان المساعد الأساسي للذكاء الاصطناعي المستخدم طوال دورة حياة التطوير هو <strong><span class="en">GLM 5.2</span></strong> (2026) من <strong><span class="en">Z.ai</span></strong>، الذي استُخدم لتوليد الأكواد وتحليل البنية المعمارية وإصلاح الأخطاء وكتابة الوثائق والتصميم البصري. كما استُشير وكلاء ذكاء اصطناعي إضافيّون لمراجعة الأكواد وتوليف الأبحاث وإرشاد الاختبار عبر المنصّات. وقد أسهمت هذه الأدوات المعتمدة على الذكاء الاصطناعي في تسريع التحسين التكراري للمشروع عبر قنوات توزيع تطبيق الويب التقدّمي <span class="en">(PWA)</span> وتطبيق سطح المكتب <span class="en">Tauri</span>.
+    </div>
+  </div>
+
+  <div class="ack-section">
+    <div class="ack-title">الاعتماديات مفتوحة المصدر</div>
+    <div class="ack-text">
+      يُبنى <strong>RDAT: مساعد الترجمة</strong> على المشروعات مفتوحة المصدر التالية: <strong><span class="en">Tauri 2</span></strong> (إطار عمل تطبيقات سطح المكتب)، و<strong><span class="en">React 19</span></strong> و<strong><span class="en">Vite 6</span></strong> (الواجهة الأمامية)، و<strong><span class="en">Ollama</span></strong> (محرّك تشغيل نماذج اللغة الكبيرة المحلي)، و<strong><span class="en">@mlc-ai/web-llm</span></strong> (استدلال نماذج اللغة في المتصفّح)، و<strong><span class="en">@google/genai</span></strong> (حزمة <span class="en">Gemini SDK</span>)، و<strong><span class="en">Tailwind CSS 4</span></strong> (التنسيق)، و<strong><span class="en">Zustand 5</span></strong> (إدارة الحالة)، و<strong><span class="en">Motion</span></strong> (الحركات). تُتاح معلومات الترخيص الكاملة في المستودع.
+    </div>
+  </div>
+
+  <div class="page-footer">
+    <span class="ar">RDAT: مساعد الترجمة / الإصدار 0.2.0 / دليل المستخدم</span>
+    <span class="num">صفحة 6</span>
+  </div>
+</div>
+
+</body>
+</html>
