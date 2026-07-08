@@ -16,7 +16,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     const id = Date.now().toString() + Math.random().toString(36).substr(2, 5);
     setToasts((prev) => [...prev, { id, message, type }]);
 
-    // Auto remove after 4 seconds
     setTimeout(() => {
       removeToast(id);
     }, 4000);
@@ -26,22 +25,25 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
     <ToastContext.Provider value={{ toasts, showToast, removeToast }}>
       {children}
 
-      {/* Floating Toasts container */}
       <div className="fixed bottom-16 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none select-none">
         <AnimatePresence>
           {toasts.map((toast) => {
-            let icon = <Info className="w-4 h-4 text-primary" />;
-            let borderClass = "border-primary/20 dark:bg-[#14161b] bg-background/95 text-white dark:text-white text-foreground";
-            
+            // Consistent dark background for ALL toast types.
+            // Uses the app's surface color with colored left border
+            // to distinguish types, instead of different backgrounds
+            // that clash with the dark theme.
+            let icon = <Info className="w-4 h-4 text-blue-400" />;
+            let borderColor = "border-l-blue-500";
+
             if (toast.type === "success") {
-              icon = <CheckCircle2 className="w-4 h-4 text-emerald-400 dark:text-emerald-400" />;
-              borderClass = "border-emerald-500/20 dark:bg-emerald-950/80 bg-emerald-50 text-white dark:text-white text-foreground";
+              icon = <CheckCircle2 className="w-4 h-4 text-emerald-400" />;
+              borderColor = "border-l-emerald-500";
             } else if (toast.type === "error") {
-              icon = <AlertCircle className="w-4 h-4 text-rose-400 dark:text-rose-400" />;
-              borderClass = "border-rose-500/20 dark:bg-rose-950/80 bg-rose-50 text-white dark:text-white text-foreground";
+              icon = <AlertCircle className="w-4 h-4 text-rose-400" />;
+              borderColor = "border-l-rose-500";
             } else if (toast.type === "warning") {
-              icon = <AlertCircle className="w-4 h-4 text-amber-400 dark:text-amber-400" />;
-              borderClass = "border-amber-500/20 dark:bg-amber-950/80 bg-amber-50 text-white dark:text-white text-foreground";
+              icon = <AlertCircle className="w-4 h-4 text-amber-400" />;
+              borderColor = "border-l-amber-500";
             }
 
             return (
@@ -50,10 +52,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
-                className={`pointer-events-auto flex items-start gap-3 p-4 rounded-xl border backdrop-blur-md shadow-lg transition-all ${borderClass}`}
+                className={`pointer-events-auto flex items-start gap-3 p-4 rounded-xl border border-white/10 border-l-4 ${borderColor} bg-[#1a1d23] shadow-lg backdrop-blur-md`}
               >
                 <div className="mt-0.5 shrink-0">{icon}</div>
-                <div className="flex-1 text-xs font-semibold leading-relaxed pr-2 text-white dark:text-white">
+                <div className="flex-1 text-xs font-semibold leading-relaxed pr-2 text-white">
                   {toast.message}
                 </div>
                 <button

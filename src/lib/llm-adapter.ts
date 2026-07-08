@@ -157,22 +157,35 @@ export interface LLMAdapter {
 // Shared between adapters so the prompt is identical regardless of backend.
 // Extracted here so changes to the prompt format apply to both adapters.
 
-export function buildRAGSystemPrompt(ragEntries?: CorpusEntry[]): string {
-  const baseInstructions = [
-    "You are a professional English-to-Arabic translator specializing in Computer-Assisted Translation (CAT) workflows.",
-    "Your task is to translate the given English text into natural, accurate, and fluent Arabic.",
-    "Follow these rules strictly:",
-    "1. Use the reference glossary terms preferentially wherever they apply.",
-    "2. Maintain terminological consistency — if a term appears multiple times, translate it the same way each time.",
-    "3. Produce Modern Standard Arabic (فصحى) suitable for professional/academic contexts.",
-    "4. Do NOT add explanations, notes, transliterations, or commentary.",
-    "5. Output ONLY the Arabic translation — nothing else.",
-  ].join("\n");
+export function buildRAGSystemPrompt(ragEntries?: CorpusEntry[], direction?: "en-ar" | "ar-en"): string {
+  const isArToEn = direction === "ar-en";
+
+  const baseInstructions = isArToEn
+    ? [
+        "You are a professional Arabic-to-English translator specializing in Computer-Assisted Translation (CAT) workflows.",
+        "Your task is to translate the given Arabic text into natural, accurate, and fluent English.",
+        "Follow these rules strictly:",
+        "1. Use the reference glossary terms preferentially wherever they apply.",
+        "2. Maintain terminological consistency.",
+        "3. Produce professional English suitable for academic contexts.",
+        "4. Do NOT add explanations, notes, or commentary.",
+        "5. Output ONLY the English translation.",
+      ].join("\n")
+    : [
+        "You are a professional English-to-Arabic translator specializing in Computer-Assisted Translation (CAT) workflows.",
+        "Your task is to translate the given English text into natural, accurate, and fluent Arabic.",
+        "Follow these rules strictly:",
+        "1. Use the reference glossary terms preferentially wherever they apply.",
+        "2. Maintain terminological consistency.",
+        "3. Produce Modern Standard Arabic suitable for professional/academic contexts.",
+        "4. Do NOT add explanations, notes, or commentary.",
+        "5. Output ONLY the Arabic translation.",
+      ].join("\n");
 
   let ragContext = "";
   if (ragEntries && ragEntries.length > 0) {
     const formatted = ragEntries
-      .map((e) => `  • "${e.en}" → "${e.ar}"`)
+      .map((e) => `  - "${e.en}" -> "${e.ar}"`)
       .join("\n");
     ragContext = `\n\nReference glossary (use these terms preferentially where applicable):\n${formatted}`;
   }
@@ -180,25 +193,21 @@ export function buildRAGSystemPrompt(ragEntries?: CorpusEntry[]): string {
   return baseInstructions + ragContext;
 }
 
-// ─── Helper: Build User Prompt ────────────────────────────────────
+export function buildUserPrompt(sourceText: string, targetPrefix?: string, direction?: "en-ar" | "ar-en"): string {
+  const isArToEn = direction === "ar-en";
+  const sourceLabel = isArToEn ? "Arabic source" : "English source";
+  const targetLabel = isArToEn ? "English translation" : "Arabic translation";
+  const targetLang = isArToEn ? "English" : "Arabic";
 
-export function buildUserPrompt(sourceText: string, targetPrefix?: string): string {
   const prefix = targetPrefix?.trim();
   if (prefix) {
-    // Continuation prompt: the model sees the source text AND the partial
-    // translation, and must continue from where the translator left off.
-    // This is more effective with small models (1.5B-2B) than asking for
-    // a full translation that "must start with" the prefix, because:
-    //   1. The model sees the prefix as already-done work, not a constraint
-    //   2. The model's job is to CONTINUE, not to RE-GENERATE
-    //   3. The output is more likely to be a natural continuation
-    return `English source: ${sourceText}
+    return `${sourceLabel}: ${sourceText}
 
-Arabic translation so far: ${prefix}
+${targetLabel} so far: ${prefix}
 
-Continue the Arabic translation. Output ONLY the next words that follow "${prefix}". Do not repeat what is already written. Do not add explanations.`;
+Continue the ${targetLang} translation. Output ONLY the next words that follow "${prefix}". Do not repeat what is already written. Do not add explanations.`;
   }
-  return `English source: ${sourceText}
+  return `${sourceLabel}: ${sourceText}
 
-Translate to Arabic. Output ONLY the Arabic translation. Do not add explanations.`;
+Translate to ${targetLang}. Output ONLY the ${targetLang} translation. Do not add explanations.`;
 }

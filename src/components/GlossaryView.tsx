@@ -8,7 +8,8 @@ import {
   CheckCircle2,
   XSquare,
   Trash2,
-  AlertCircle
+  AlertCircle,
+  Plus
 } from "lucide-react";
 import { GlossaryEntry } from "../types";
 
@@ -27,6 +28,7 @@ export function GlossaryView() {
 
   const [searchTerm, setSearchTerm] = useState("");
   const [entries, setEntries] = useState<GlossaryEntry[]>([]);
+  const [newTerm, setNewTerm] = useState({ source: "", target: "", domain: "general" });
   const [uploadStatus, setUploadStatus] = useState<"idle" | "importing" | "success" | "error">("idle");
   const [importProgress, setImportProgress] = useState(0);
   const [downloadingDb, setDownloadingDb] = useState<string | null>(null);
@@ -159,6 +161,24 @@ export function GlossaryView() {
     );
   });
 
+  const handleAddTerm = useCallback(async () => {
+    if (!newTerm.source.trim() || !newTerm.target.trim()) return;
+    try {
+      await addGlossary({
+        source_term: newTerm.source.trim(),
+        target_term: newTerm.target.trim(),
+        source_lang: "en",
+        target_lang: "ar",
+        pos: "term",
+        domain: newTerm.domain || "general",
+      });
+      setNewTerm({ source: "", target: "", domain: "general" });
+      await loadGlossaryEntries();
+    } catch (e) {
+      console.error("[Glossary] Add term failed:", e);
+    }
+  }, [newTerm, addGlossary, loadGlossaryEntries]);
+
   return (
     <div className="h-full overflow-y-auto bg-background p-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="max-w-4xl mx-auto space-y-6">
@@ -220,6 +240,47 @@ export function GlossaryView() {
                 disabled={uploadStatus === "importing"}
               />
             </label>
+          </div>
+        </div>
+
+        {/* Add Term Form */}
+        <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+          <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-2">
+            <Plus className="w-4 h-4 text-primary" />
+            {isRTL ? "إضافة مصطلح جديد" : "Add New Term"}
+          </h3>
+          <div className="flex flex-col sm:flex-row gap-2">
+            <input
+              type="text"
+              value={newTerm.source}
+              onChange={(e) => setNewTerm({ ...newTerm, source: e.target.value })}
+              placeholder={isRTL ? "المصطلح بالإنجليزية" : "English term"}
+              className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/50"
+              dir="ltr"
+            />
+            <input
+              type="text"
+              value={newTerm.target}
+              onChange={(e) => setNewTerm({ ...newTerm, target: e.target.value })}
+              placeholder={isRTL ? "المصطلح بالعربية" : "Arabic translation"}
+              className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/50"
+              dir="rtl"
+            />
+            <input
+              type="text"
+              value={newTerm.domain}
+              onChange={(e) => setNewTerm({ ...newTerm, domain: e.target.value })}
+              placeholder={isRTL ? "المجال" : "Domain"}
+              className="sm:w-32 bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/50"
+            />
+            <button
+              onClick={handleAddTerm}
+              disabled={!newTerm.source.trim() || !newTerm.target.trim()}
+              className="flex items-center justify-center gap-1.5 px-4 py-2 rounded-lg text-xs font-bold bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed transition-colors cursor-pointer"
+            >
+              <Plus className="w-3.5 h-3.5" />
+              {isRTL ? "إضافة" : "Add"}
+            </button>
           </div>
         </div>
 

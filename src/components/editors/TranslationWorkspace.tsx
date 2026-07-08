@@ -387,8 +387,8 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       {/* Main panels */}
       <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
 
-      {/* Left panel (Source reader) */}
-      <div className="flex-1 h-1/2 lg:h-full overflow-hidden">
+      {/* Source panel (left for EN-AR, right for AR-EN) */}
+      <div className={cn("flex-1 h-1/2 lg:h-full overflow-hidden", isArToEn && "lg:order-2")}>
         <SourceEditor
           sentences={sentences}
           currentIdx={currentSegmentIndex}
@@ -398,13 +398,15 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
         />
       </div>
 
-      {/* Center panel (Arabic active target writer) */}
-      <div className="flex-1 h-1/2 lg:h-full flex flex-col bg-[#0A0B0E] overflow-hidden border-r dark:border-white/5 border-border">
-        
+      {/* Target panel (right for EN-AR, left for AR-EN) */}
+      <div className={cn("flex-1 h-1/2 lg:h-full flex flex-col bg-[#0A0B0E] overflow-hidden border-r dark:border-white/5 border-border", isArToEn && "lg:order-1")}>
+
         {/* Panel Header */}
         <div className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4 text-xs font-semibold select-none">
           <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-            {isRTL ? "الترجمة المقابلة — عربي (RTL)" : "Target Translation — Arabic"}
+            {isArToEn
+              ? (isRTL ? "الترجمة المقابلة - إنكليزي (LTR)" : "Target Translation - English")
+              : (isRTL ? "الترجمة المقابلة - عربي (RTL)" : "Target Translation - Arabic")}
           </span>
           <div className="flex items-center gap-3">
             {/* Completion indicator */}

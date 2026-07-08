@@ -44,6 +44,7 @@ import type {
 } from "../llm-adapter";
 import { buildRAGSystemPrompt, buildUserPrompt } from "../llm-adapter";
 import type { CorpusEntry } from "../local-translation-engine";
+import { useWorkspaceStore } from "../../stores/workspace-store";
 
 // ─── Tauri Detection ──────────────────────────────────────────────
 // We check for Tauri's runtime global. This avoids importing
@@ -278,8 +279,11 @@ export class OllamaAdapter implements LLMAdapter {
 
     const { sourceText, targetPrefix = "", ragEntries, maxTokens = 256, temperature = 0.3 } = opts;
 
-    const systemPrompt = buildRAGSystemPrompt(ragEntries);
-    const userPrompt = buildUserPrompt(sourceText, targetPrefix);
+    // Get direction from workspace store
+    const direction = useWorkspaceStore.getState().direction || "en-ar";
+
+    const systemPrompt = buildRAGSystemPrompt(ragEntries, direction);
+    const userPrompt = buildUserPrompt(sourceText, targetPrefix, direction);
 
     const prevState = currentState;
     setState("generating");

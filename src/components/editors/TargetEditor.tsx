@@ -14,6 +14,7 @@ import { getActiveAdapterSync, getActiveAdapter, isTauriEnvironment } from "../.
 import type { LLMAdapter } from "../../lib/llm-adapter";
 import { useGemini } from "../../hooks/useGemini";
 import { useSettingsStore } from "../../stores/settings-store";
+import { useWorkspaceStore } from "../../stores/workspace-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useEditorActivityStore } from "../../stores/editor-activity-store";
 import { useToast } from "../../context/ToastContext";
@@ -96,6 +97,8 @@ export function TargetEditor({
 
   const { generateBurst, loading } = useGemini();
   const { engineMode, useCloudFallback, loadedModel } = useSettingsStore();
+  const direction = useWorkspaceStore((s) => s.direction);
+  const isTargetRTL = direction === "en-ar"; // Target is Arabic (RTL) for EN-AR, English (LTR) for AR-EN
   const { showToast } = useToast();
   const requestNav = useUIStore((s) => s.requestNav);
   const setEditorActivity = useEditorActivityStore((s) => s.setActivity);
@@ -625,10 +628,12 @@ export function TargetEditor({
             the textarea is empty. */}
         {!translationText && (
           <div
-            className="absolute top-3.5 right-4 text-sm md:text-base text-muted-foreground/40 font-medium pointer-events-none select-none"
-            dir="rtl"
+            className={cn("absolute top-3.5 text-sm md:text-base text-muted-foreground/40 font-medium pointer-events-none select-none", isTargetRTL ? "right-4" : "left-4")}
+            dir={isTargetRTL ? "rtl" : "ltr"}
           >
-            {isRTL ? "أدخل الترجمة العربية هنا..." : "Enter translation in Arabic..."}
+            {isTargetRTL
+              ? (isRTL ? "أدخل الترجمة العربية هنا..." : "Enter translation in Arabic...")
+              : (isRTL ? "أدخل الترجمة الإنجليزية هنا..." : "Enter translation in English...")}
           </div>
         )}
         <textarea
@@ -636,10 +641,10 @@ export function TargetEditor({
           value={translationText}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={handleKeyDown}
-          dir="rtl"
+          dir={isTargetRTL ? "rtl" : "ltr"}
           placeholder=""
           rows={2}
-          className="w-full bg-background/50 dark:bg-[#0A0B0E] border dark:border-white/10 border-border/80 rounded-xl p-4 text-sm md:text-base text-foreground text-right focus:outline-none focus:border-primary/50 font-medium leading-relaxed resize-none transition-all"
+          className={cn("w-full bg-background/50 dark:bg-[#0A0B0E] border dark:border-white/10 border-border/80 rounded-xl p-4 text-sm md:text-base text-foreground focus:outline-none focus:border-primary/50 font-medium leading-relaxed resize-none transition-all", isTargetRTL ? "text-right" : "text-left")}
         />
 
         {ghostSuggestion && isActive && (
