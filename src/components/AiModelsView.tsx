@@ -18,7 +18,7 @@ import {
   Zap,
 } from "lucide-react";
 import { cn } from "../lib/utils";
-import { getActiveAdapter, resetAdapter, isTauriEnvironment } from "../lib/adapters";
+import { getActiveAdapter, getActiveAdapterSync, resetAdapter, isTauriEnvironment } from "../lib/adapters";
 import { getHealthDiagnostics, type HealthDiagnostics } from "../lib/adapters/ollama-adapter";
 import type { LLMAdapter, ModelInfo } from "../lib/llm-adapter";
 
@@ -62,8 +62,11 @@ export function AiModelsView() {
   } = useSettingsStore();
 
   // ─── Adapter State ───────────────────────────────────────────────
-  const [adapter, setAdapter] = useState<LLMAdapter | null>(null);
-  const [adapterLoading, setAdapterLoading] = useState(true);
+  // Check sync first - if WorkspaceShell already detected the adapter,
+  // skip the loading spinner entirely. This prevents the user from
+  // seeing the spinner and clicking Skip when the adapter is already ready.
+  const [adapter, setAdapter] = useState<LLMAdapter | null>(getActiveAdapterSync());
+  const [adapterLoading, setAdapterLoading] = useState(getActiveAdapterSync() === null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [daemonHealthy, setDaemonHealthy] = useState<boolean>(false);
   const [adapterState, setAdapterState] = useState<string>("idle");

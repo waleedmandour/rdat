@@ -8,6 +8,7 @@ import {
   generateRAGTranslation,
   prefetchTranslation,
   getPrefetch,
+  cachePrefetch,
 } from "../../lib/local-llm-engine";
 import { getActiveAdapterSync, getActiveAdapter, isTauriEnvironment } from "../../lib/adapters";
 import type { LLMAdapter } from "../../lib/llm-adapter";
@@ -129,7 +130,7 @@ export function TargetEditor({
   const DEVIATION_THRESHOLD = 0.6;
   const IDLE_PAUSE_MS = 2000; // Re-engage suggestions after 2s pause
   const MIN_PREFIX_FOR_LLM = 3; // Don't call LLM for prefixes shorter than 3 chars
-  const LLM_DEBOUNCE_MS = 600; // Longer debounce for LLM calls (was 400)
+  const LLM_DEBOUNCE_MS = 500; // Debounce for LLM calls
 
   // Per-session toast dedup — prevents spamming the same error toast
   // on every keystroke / segment switch. Keys are error-class strings
@@ -441,8 +442,29 @@ export function TargetEditor({
         return;
       }
       prefetchTranslation(sourceText).catch(() => {});
+
+      // Also trigger a background Ollama call for the full translation
+      // so when the user starts typing, the result is already cached.
+      // This dramatically reduces perceived latency.
+      if (isTauriEnvironment()) {
+        const adapter = getActiveAdapterSync();
+        if (adapter && adapter.isModelLoaded()) {
+          console.log("[TargetEditor] Prefetching full translation for segment focus...");
+          adapter.translate({
+            sourceText,
+            targetPrefix: "",
+            ragEntries: getLTE().getStats().entries > 0 ? getLTE().search(sourceText, 5) : undefined,
+          }).then((candidates) => {
+            if (candidates.length > 0 && candidates[0].trim()) {
+              // Cache the result so the first keystroke gets instant ghost text
+              cachePrefetch(sourceText, candidates[0]);
+              console.log("[TargetEditor] Prefetch complete:", candidates[0].substring(0, 60));
+            }
+          }).catch(() => {});
+        }
+      }
+
       // Only fetch suggestions on initial focus if there's already text typed.
-      // Don't call Ollama with empty text - it wastes 2-3 seconds for nothing.
       if (translationText.trim().length >= MIN_PREFIX_FOR_LLM) {
         fetchSuggestions(translationText).finally(() => setEditorActivity("idle"));
       }
@@ -634,8 +656,8 @@ export function TargetEditor({
                 tierSource === "gemini" && "bg-amber-500/15 text-amber-500"
               )}>
                 {tierSource === "lte" && (isRTL ? "ذاكرة" : "LTE")}
-                {tierSource === "local-llm" && loadedModel && (
-                  <><Cpu className="w-3 h-3" />{loadedModel.toUpperCase()}</>
+                {tierSource === "local-llm" && (
+                  <><Cpu className="w-3 h-3" />{isRTL ? "محلي" : "LLM"}</>
                 )}
                 {tierSource === "gemini" && (isRTL ? "سحابي" : "GEMINI")}
               </span>
