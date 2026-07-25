@@ -363,7 +363,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
   }, [sidebarSearchTerm, glossaryEntries]);
 
   return (
-    <div className="h-full flex flex-col bg-[#0A0B0E] overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="h-full flex flex-col bg-background overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
 
       {/* Direction Toggle Bar */}
       <div className="h-9 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-center gap-2 px-4 select-none">
@@ -406,7 +406,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       </div>
 
       {/* Target panel (right for EN-AR, left for AR-EN) */}
-      <div className={cn("flex-1 h-1/2 lg:h-full flex flex-col bg-[#0A0B0E] overflow-hidden border-r dark:border-white/5 border-border", isArToEn && "lg:order-1")}>
+      <div className={cn("flex-1 h-1/2 lg:h-full flex flex-col bg-background overflow-hidden border-r dark:border-white/5 border-border", isArToEn && "lg:order-1")}>
 
         {/* Panel Header */}
         <div className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4 text-xs font-semibold select-none">
@@ -464,7 +464,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       </div>
 
       {/* Right panel (Terminology matched Sidebar & AI Tutor) */}
-      <aside className="w-80 border-l dark:border-white/10 border-border dark:bg-[#111318] bg-surface flex flex-col select-none shrink-0 hidden md:flex">
+      <aside className="w-80 border-l dark:border-white/10 border-border bg-surface flex flex-col select-none shrink-0 hidden md:flex">
         
         {/* Sidebar Tab Switcher */}
         <div className="h-11 border-b border-border dark:border-white/5 flex items-center bg-gray-50/5 dark:bg-black/10 shrink-0">
@@ -503,7 +503,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
                 value={sidebarSearchTerm}
                 onChange={(e) => setSidebarSearchTerm(e.target.value)}
                 placeholder={isRTL ? "ابحث بالقاموس..." : "Search Glossary..."}
-                className="w-full bg-[#0A0B0E] dark:bg-[#0A0B0E] bg-background border dark:border-white/10 border-border rounded px-3 py-2 text-xs focus:border-primary outline-none text-foreground font-medium"
+                className="w-full bg-background border dark:border-white/10 border-border rounded px-3 py-2 text-xs focus:border-primary outline-none text-foreground font-medium"
               />
               <Search className="absolute right-7 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground/50 pointer-events-none" />
             </div>

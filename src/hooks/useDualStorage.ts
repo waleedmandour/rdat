@@ -1,5 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getAllofStore, putToStore, deleteFromStore, importGlossaryChunked, clearStore } from "../lib/dual-storage";
+import {
+  getAllofStore,
+  putToStore,
+  deleteFromStore,
+  importGlossaryChunked,
+  clearStore,
+  getDownloadedDbs,
+  setDownloadedDbs,
+} from "../lib/dual-storage";
 import { TMEntry, GlossaryEntry, SegmentEntry } from "../types";
 import { getLTE } from "../lib/local-translation-engine";
 import { SEED_CORPUS } from "../lib/seed-corpus";
@@ -31,6 +39,11 @@ export function useDualStorage() {
   const [isSyncing, setIsSyncing] = useState(false);
   const [isBackendReachable, setIsBackendReachable] = useState(true);
   const [lastSyncAt, setLastSyncAt] = useState<number | null>(null);
+
+  // Persisted set of reference DB IDs the user has downloaded. Loaded
+  // from sync_meta on mount so GlossaryView can show "Use" instead of
+  // "Download" on revisits. See PHASE 2 task 2.3.
+  const [downloadedDbs, setDownloadedDbsState] = useState<string[]>([]);
 
   // Deferred LTE rebuild — coalesces multiple back-to-back refreshCounts()
   // calls (e.g. during bulk import) into a single load() call.
@@ -85,6 +98,13 @@ export function useDualStorage() {
 
   useEffect(() => {
     refreshCounts();
+
+    // Load the persisted set of downloaded reference DB IDs so the
+    // GlossaryView can render the correct button label on mount.
+    // See PHASE 2 task 2.3.
+    getDownloadedDbs()
+      .then((ids) => setDownloadedDbsState(ids))
+      .catch((err) => console.error("[useDualStorage] Failed to load downloaded DB list:", err));
 
     // Polling sync network check
     const checkNetwork = () => {
@@ -162,6 +182,66 @@ export function useDualStorage() {
     await refreshCounts();
   }, [refreshCounts]);
 
+  /**
+   * Update an existing glossary entry in place. IndexedDB's put() upserts
+   * by key, so passing the existing entry (with its `id`) plus the
+   * changed fields is enough. After saving, refreshCounts() re-runs the
+   * LTE rebuild so ghost-text suggestions pick up the edited term
+   * immediately. See PHASE 2 task 2.4.
+   */
+  const updateGlossary = useCallback(
+    async (id: number, changes: Partial<Omit<GlossaryEntry, "id">>) => {
+      // Read the existing record so we merge instead of overwriting.
+      const { getFromStore } = await import("../lib/dual-storage");
+      const existing = await getFromStore<GlossaryEntry>("glossary", id);
+      if (!existing) {
+        throw new Error(`Glossary entry with id ${id} not found`);
+      }
+      const updated: GlossaryEntry = { ...existing, ...changes, id };
+      await putToStore("glossary", updated);
+      await refreshCounts();
+    },
+    [refreshCounts]
+  );
+
+  /**
+   * Mark a reference DB as downloaded (persisted in sync_meta). Called
+   * by GlossaryView after a successful download so the button label
+   * flips from "Download" to "Use" and survives reloads. See PHASE 2
+   * task 2.3.
+   */
+  const markDbDownloaded = useCallback(async (dbId: string) => {
+    setDownloadedDbsState((prev) =>
+      prev.includes(dbId) ? prev : [...prev, dbId]
+    );
+    // Read the current persisted list fresh in case multiple tabs are
+    // active; merge; then write back.
+    try {
+      const current = await getDownloadedDbs();
+      if (!current.includes(dbId)) {
+        await setDownloadedDbs([...current, dbId]);
+      }
+    } catch (err) {
+      console.error("[useDualStorage] Failed to persist downloaded DB:", err);
+    }
+  }, []);
+
+  /**
+   * Remove a reference DB from the downloaded set. Called when the
+   * user clicks "Use" again to toggle the DB off (which also removes
+   * its entries from IndexedDB — handled by the caller). See PHASE 2
+   * task 2.3.
+   */
+  const unmarkDbDownloaded = useCallback(async (dbId: string) => {
+    setDownloadedDbsState((prev) => prev.filter((id) => id !== dbId));
+    try {
+      const current = await getDownloadedDbs();
+      await setDownloadedDbs(current.filter((id) => id !== dbId));
+    } catch (err) {
+      console.error("[useDualStorage] Failed to update downloaded DB list:", err);
+    }
+  }, []);
+
   return {
     tmCount,
     glossaryCount,
@@ -174,6 +254,11 @@ export function useDualStorage() {
     removeGlossary,
     clearGlossary,
     importGlossary,
+    updateGlossary,
     refreshCounts,
+    // Reference-DB download state (PHASE 2 task 2.3)
+    downloadedDbs,
+    markDbDownloaded,
+    unmarkDbDownloaded,
   };
 }

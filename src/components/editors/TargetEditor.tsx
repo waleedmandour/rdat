@@ -649,7 +649,7 @@ export function TargetEditor({
           dir={isTargetRTL ? "rtl" : "ltr"}
           placeholder=""
           rows={2}
-          className={cn("w-full bg-background/50 dark:bg-[#0A0B0E] border dark:border-white/10 border-border/80 rounded-xl p-4 text-sm md:text-base text-foreground focus:outline-none focus:border-primary/50 font-medium leading-relaxed resize-none transition-all", isTargetRTL ? "text-right" : "text-left")}
+          className={cn("w-full bg-background/50 border dark:border-white/10 border-border/80 rounded-xl p-4 text-sm md:text-base text-foreground focus:outline-none focus:border-primary/50 font-medium leading-relaxed resize-none transition-all", isTargetRTL ? "text-right" : "text-left")}
         />
 
         {ghostSuggestion && isActive && (

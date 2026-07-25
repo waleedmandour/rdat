@@ -3,6 +3,13 @@ import { TMEntry, GlossaryEntry, SegmentEntry, StoreName } from "../types";
 const DB_NAME = "rdat_copilot_db";
 const DB_VERSION = 2;
 
+// Key used inside the `sync_meta` object store to persist the set of
+// reference DB IDs that the user has downloaded. Stored as a string[]
+// so it survives page reloads (previously this was local useState only,
+// which reset on every reload and showed "Download" again — see PHASE
+// 2 task 2.3).
+export const DOWNLOADED_DBS_KEY = "downloaded_reference_dbs";
+
 export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -108,4 +115,57 @@ export async function importGlossaryChunked(
     // Yield control back to the browser's paint and main lifecycle loop
     await new Promise((resolve) => setTimeout(resolve, 0));
   }
+}
+
+// ─── Single-record read (for editing existing glossary entries) ──────
+// Returns the record with the given key from the given store, or
+// undefined if not found. Used by GlossaryView's edit flow so we can
+// show the current values when the user starts editing. See PHASE 2
+// task 2.4.
+export async function getFromStore<T>(
+  storeName: StoreName,
+  id: number | string
+): Promise<T | undefined> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const store = tx.objectStore(storeName);
+    const request = store.get(id);
+
+    request.onsuccess = () => resolve(request.result as T | undefined);
+    request.onerror = () => reject(tx.error);
+  });
+}
+
+// ─── Reference-DB download-state persistence ────────────────────────
+// The set of reference DB IDs the user has downloaded is stored in the
+// sync_meta object store keyed by DOWNLOADED_DBS_KEY. This survives
+// page reloads so the GlossaryView can show "Use" instead of "Download"
+// on revisits. See PHASE 2 task 2.3.
+
+export async function getDownloadedDbs(): Promise<string[]> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("sync_meta", "readonly");
+    const store = tx.objectStore("sync_meta");
+    const request = store.get(DOWNLOADED_DBS_KEY);
+
+    request.onsuccess = () => {
+      const result = request.result as { key: string; value: string[] } | undefined;
+      resolve(result?.value ?? []);
+    };
+    request.onerror = () => reject(tx.error);
+  });
+}
+
+export async function setDownloadedDbs(ids: string[]): Promise<void> {
+  const db = await openDB();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction("sync_meta", "readwrite");
+    const store = tx.objectStore("sync_meta");
+    const request = store.put({ key: DOWNLOADED_DBS_KEY, value: ids });
+
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(tx.error);
+  });
 }

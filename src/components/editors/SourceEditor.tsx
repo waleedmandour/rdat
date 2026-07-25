@@ -154,7 +154,7 @@ export function SourceEditor({
   };
 
   return (
-    <div className="h-full flex flex-col dark:bg-[#0F1116] bg-background font-sans select-none border-b border-border md:border-b-0 md:border-r">
+    <div className="h-full flex flex-col bg-background font-sans select-none border-b border-border md:border-b-0 md:border-r">
       {/* Editor Panel Header */}
       <div className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4">
         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
@@ -221,7 +221,7 @@ export function SourceEditor({
             placeholder={isSourceArabic
               ? (isRTL ? "أو قم بلصق محتوى المستند العربي هنا..." : "Or paste Arabic source document content directly here...")
               : (isRTL ? "أو قم بلصق نص المصدر المباشر هنا..." : "Or paste English source document content directly here...")}
-            className="w-full text-xs font-sans p-3 bg-background dark:bg-[#0A0B0E] border border-border/80 rounded-lg h-24 focus:outline-none focus:border-primary/50 resize-none"
+            className="w-full text-xs font-sans p-3 bg-background border border-border/80 rounded-lg h-24 focus:outline-none focus:border-primary/50 resize-none"
           />
 
           <button

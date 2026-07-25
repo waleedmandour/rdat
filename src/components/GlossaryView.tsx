@@ -9,21 +9,91 @@ import {
   XSquare,
   Trash2,
   AlertCircle,
-  Plus
+  Plus,
+  Pencil,
+  Save,
+  X,
 } from "lucide-react";
 import { GlossaryEntry } from "../types";
+import { getAllofStore, deleteFromStore } from "../lib/dual-storage";
+
+// ─── Reference DB catalog ──────────────────────────────────────────
+// Each entry maps a stable dbId to the seed entries that get imported
+// when the user clicks "Download". The `source_db` field on every
+// imported entry lets us later remove exactly that DB's rows when the
+// user toggles it off (clicks "Use" again). See PHASE 2 tasks 2.3/2.4.
+//
+// Multiple reference DBs can be "in use" simultaneously — the data
+// model already allows their rows to coexist in IndexedDB, and the
+// LTE indexes all of them together. The "Use" button is therefore a
+// toggle: clicking it when already downloaded removes that DB's
+// entries; clicking "Download" imports them and marks the DB as
+// downloaded. We chose the toggle model over a single-active-DB
+// model because (a) it matches the existing data model and (b) the
+// project owner's intent wasn't confirmed in the brief — toggle is
+// the more flexible default. If exclusive single-DB use is later
+// required, the change is local to this file.
+interface RefDbDef {
+  id: string;
+  label: string;
+  desc: string;
+  entries: Omit<GlossaryEntry, "id">[];
+}
+
+const REFERENCE_DBS: RefDbDef[] = [
+  {
+    id: "wipo",
+    label: "WIPO Pearl Patent (UN IP)",
+    desc: "Legal IP patents dictionary (~100 entries)",
+    entries: [
+      { source_term: "Patent Cooperation Treaty", target_term: "معاهدة التعاون بشأن البراءات", source_lang: "en", target_lang: "ar", pos: "term", domain: "Legal/IP", source_db: "wipo" },
+      { source_term: "intellectual property", target_term: "الملكية الفكرية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "Legal", source_db: "wipo" },
+      { source_term: "genetic resources", target_term: "الموارد الوراثية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IP", source_db: "wipo" },
+      { source_term: "industrial design", target_term: "التصميم الصناعي", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IP", source_db: "wipo" },
+    ],
+  },
+  {
+    id: "microsoft",
+    label: "Microsoft Tech Terminology",
+    desc: "Software, Cloud and localization terminology",
+    entries: [
+      { source_term: "operating system", target_term: "نظام التشغيل", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IT", source_db: "microsoft" },
+      { source_term: "cloud infrastructure", target_term: "البنية التحتية السحابية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "Tech", source_db: "microsoft" },
+      { source_term: "virtual machine", target_term: "آلة افتراضية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IT", source_db: "microsoft" },
+      { source_term: "user authentication", target_term: "مصادقة المستخدم", source_lang: "en", target_lang: "ar", pos: "noun", domain: "Security", source_db: "microsoft" },
+    ],
+  },
+  {
+    id: "opus",
+    label: "OPUS Wikipedia Parallel Corpus",
+    desc: "Open encyclopedic bilingual data (~400 entries)",
+    entries: Array.from({ length: 400 }, (_, i) => ({
+      source_term: `Term Segment Reference #${i}`,
+      target_term: `مرجع جزء المصطلح رقم #${i}`,
+      source_lang: "en",
+      target_lang: "ar",
+      pos: "phrase",
+      domain: "Corpus",
+      source_db: "opus",
+    })),
+  },
+];
 
 export function GlossaryView() {
   const { locale, t } = useLanguage();
   const isRTL = locale === "ar";
-  
+
   const {
     glossaryCount,
     addGlossary,
     removeGlossary,
     clearGlossary,
     importGlossary,
-    refreshCounts
+    updateGlossary,
+    refreshCounts,
+    downloadedDbs,
+    markDbDownloaded,
+    unmarkDbDownloaded,
   } = useDualStorage();
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -32,12 +102,21 @@ export function GlossaryView() {
   const [uploadStatus, setUploadStatus] = useState<"idle" | "importing" | "success" | "error">("idle");
   const [importProgress, setImportProgress] = useState(0);
   const [downloadingDb, setDownloadingDb] = useState<string | null>(null);
-  const [activeDb, setActiveDb] = useState<string | null>(null);
 
-  // Load glossary entries from IndexedDB on components load
+  // Inline-editing state (PHASE 2 task 2.4). When editingId is non-null,
+  // the row with that id renders as an editable form bound to editDraft.
+  // Saving calls updateGlossary(editingId, editDraft) and refreshes the
+  // LTE via refreshCounts().
+  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editDraft, setEditDraft] = useState<{ source_term: string; target_term: string; domain: string }>({
+    source_term: "",
+    target_term: "",
+    domain: "",
+  });
+
+  // Load glossary entries from IndexedDB on component load
   const loadGlossaryEntries = useCallback(async () => {
     try {
-      const { getAllofStore } = await import("../lib/dual-storage");
       const list = await getAllofStore<GlossaryEntry>("glossary");
       setEntries(list);
     } catch (e) {
@@ -102,56 +181,67 @@ export function GlossaryView() {
     [importGlossary, loadGlossaryEntries]
   );
 
-  const simulateDownloadDB = useCallback(async (dbId: string) => {
+  /**
+   * Download (import) a reference DB's entries into IndexedDB, then
+   * persist the DB id in sync_meta so the button label flips from
+   * "Download" to "Use" and survives reloads. See PHASE 2 task 2.3.
+   */
+  const handleDownloadDb = useCallback(async (dbId: string) => {
+    const def = REFERENCE_DBS.find((d) => d.id === dbId);
+    if (!def) return;
+
     setDownloadingDb(dbId);
     setImportProgress(0);
 
-    // Simulate multi-phase pre-fetched content download
+    // Simulate multi-phase pre-fetched content download progress so
+    // the user sees the bar fill even for tiny hardcoded datasets.
     for (let p = 10; p <= 100; p += 10) {
       setImportProgress(p);
-      await new Promise(resolve => setTimeout(resolve, 150));
+      await new Promise((resolve) => setTimeout(resolve, 120));
     }
 
     try {
-      let databaseEntries: GlossaryEntry[] = [];
-      if (dbId === "wipo") {
-        databaseEntries = [
-          { id: 10001, source_term: "Patent Cooperation Treaty", target_term: "معاهدة التعاون بشأن البراءات", source_lang: "en", target_lang: "ar", pos: "term", domain: "Legal/IP" },
-          { id: 10002, source_term: "intellectual property", target_term: "الملكية الفكرية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "Legal" },
-          { id: 10003, source_term: "genetic resources", target_term: "الموارد الوراثية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IP" },
-          { id: 10004, source_term: "industrial design", target_term: "التصميم الصناعي", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IP" }
-        ];
-      } else if (dbId === "microsoft") {
-        databaseEntries = [
-          { id: 20001, source_term: "operating system", target_term: "نظام التشغيل", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IT" },
-          { id: 20002, source_term: "cloud infrastructure", target_term: "البنية التحتية السحابية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "Tech" },
-          { id: 20003, source_term: "virtual machine", target_term: "آلة افتراضية", source_lang: "en", target_lang: "ar", pos: "noun", domain: "IT" },
-          { id: 20004, source_term: "user authentication", target_term: "مصادقة المستخدم", source_lang: "en", target_lang: "ar", pos: "noun", domain: "Security" }
-        ];
-      } else {
-        // Larger simulated dataset
-        for (let i = 0; i < 400; i++) {
-          databaseEntries.push({
-            id: 30000 + i,
-            source_term: `Term Segment Reference #${i}`,
-            target_term: `مرجع جزء المصطلح رقم #${i}`,
-            source_lang: "en",
-            target_lang: "ar",
-            pos: "phrase",
-            domain: "Corpus"
-          });
-        }
-      }
+      // Tag every entry with a stable id range + source_db so we can
+      // identify and remove them later if the user toggles the DB off.
+      const tagged: GlossaryEntry[] = def.entries.map((e, idx) => ({
+        ...e,
+        id: dbId === "wipo" ? 10000 + idx
+          : dbId === "microsoft" ? 20000 + idx
+          : 30000 + idx,
+      }));
 
-      await importGlossary(databaseEntries, (p) => setImportProgress(p));
-      setActiveDb(dbId);
+      await importGlossary(tagged, (p) => setImportProgress(p));
+      await markDbDownloaded(dbId);
     } catch (e) {
-      console.error(e);
+      console.error("[Glossary] DB download failed:", e);
     } finally {
       setDownloadingDb(null);
       await loadGlossaryEntries();
     }
-  }, [importGlossary, loadGlossaryEntries]);
+  }, [importGlossary, loadGlossaryEntries, markDbDownloaded]);
+
+  /**
+   * Toggle a previously-downloaded reference DB off: remove all its
+   * entries from IndexedDB and unmark it in sync_meta. The button
+   * label then flips back to "Download". See PHASE 2 task 2.3.
+   */
+  const handleUnuseDb = useCallback(async (dbId: string) => {
+    try {
+      // Remove every glossary row whose source_db matches. Manually
+      // built entries (no source_db) and other DBs' rows are left
+      // untouched.
+      const all = await getAllofStore<GlossaryEntry>("glossary");
+      const toRemove = all.filter((e) => e.source_db === dbId);
+      for (const e of toRemove) {
+        if (e.id != null) await deleteFromStore("glossary", e.id);
+      }
+      await unmarkDbDownloaded(dbId);
+      await refreshCounts();
+      await loadGlossaryEntries();
+    } catch (e) {
+      console.error("[Glossary] Failed to remove DB:", e);
+    }
+  }, [unmarkDbDownloaded, refreshCounts, loadGlossaryEntries]);
 
   const filteredEntries = entries.filter((item) => {
     const q = searchTerm.toLowerCase();
@@ -179,10 +269,95 @@ export function GlossaryView() {
     }
   }, [newTerm, addGlossary, loadGlossaryEntries]);
 
+  /** Begin inline editing for a row. Pre-fills the draft from the entry. */
+  const beginEdit = useCallback((entry: GlossaryEntry) => {
+    setEditingId(entry.id);
+    setEditDraft({
+      source_term: entry.source_term,
+      target_term: entry.target_term,
+      domain: entry.domain || "",
+    });
+  }, []);
+
+  /** Cancel inline editing without saving. */
+  const cancelEdit = useCallback(() => {
+    setEditingId(null);
+    setEditDraft({ source_term: "", target_term: "", domain: "" });
+  }, []);
+
+  /**
+   * Save the in-progress edit. Calls updateGlossary() which upserts
+   * via IndexedDB put(); refreshCounts() then rebuilds the LTE so
+   * ghost-text suggestions reflect the edited term immediately.
+   * See PHASE 2 task 2.4.
+   */
+  const saveEdit = useCallback(async () => {
+    if (editingId == null) return;
+    if (!editDraft.source_term.trim() || !editDraft.target_term.trim()) {
+      cancelEdit();
+      return;
+    }
+    try {
+      await updateGlossary(editingId, {
+        source_term: editDraft.source_term.trim(),
+        target_term: editDraft.target_term.trim(),
+        domain: editDraft.domain.trim() || "general",
+      });
+      cancelEdit();
+      await loadGlossaryEntries();
+    } catch (e) {
+      console.error("[Glossary] Edit save failed:", e);
+    }
+  }, [editingId, editDraft, updateGlossary, loadGlossaryEntries, cancelEdit]);
+
+  /**
+   * Render a single reference DB card's action area. Three states:
+   *   - downloading: animated progress percentage
+   *   - downloaded:  "Use" button (success-coloured) that toggles the DB off
+   *   - not yet:     "Download" button that triggers import + persist
+   *
+   * The brief asked for "Use" rather than the previous non-interactive
+   * "Active" label — we make "Use" a real toggle so the user can
+   * remove a DB they no longer want. Multiple DBs can be "in use"
+   * simultaneously; see REFERENCE_DBS comment above.
+   */
+  const renderDbAction = (dbId: string) => {
+    const isDownloading = downloadingDb === dbId;
+    const isDownloaded = downloadedDbs.includes(dbId);
+
+    if (isDownloading) {
+      return (
+        <span className="text-primary font-bold animate-pulse font-mono text-[10px]">
+          {importProgress}%
+        </span>
+      );
+    }
+    if (isDownloaded) {
+      return (
+        <button
+          onClick={() => handleUnuseDb(dbId)}
+          className="p-1 px-2.5 rounded bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 hover:bg-emerald-500/20 text-[10.5px] font-bold cursor-pointer transition-all border border-emerald-500/20 flex items-center gap-1"
+          title={isRTL ? "إزالة قاعدة البيانات هذه" : "Remove this database"}
+        >
+          <CheckCircle2 className="w-3 h-3" />
+          {isRTL ? "استخدام" : "Use"}
+        </button>
+      );
+    }
+    return (
+      <button
+        onClick={() => handleDownloadDb(dbId)}
+        className="p-1 px-2.5 rounded bg-primary/10 text-primary hover:bg-primary/20 text-[10.5px] font-bold cursor-pointer transition-all"
+      >
+        {isRTL ? "تنزيل" : "Download"}
+      </button>
+    );
+  };
+
   return (
     <div className="h-full overflow-y-auto bg-background p-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="max-w-4xl mx-auto space-y-6">
-        
+
         {/* Header Dashboard section */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border pb-6">
           <div>
@@ -286,7 +461,7 @@ export function GlossaryView() {
 
         {/* Database sources Section */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          
+
           {/* Strict Glossaries card */}
           <div className="bg-surface border border-border p-4 rounded-xl space-y-3">
             <h3 className="text-xs font-bold uppercase tracking-wider text-primary flex items-center gap-1.5">
@@ -296,36 +471,17 @@ export function GlossaryView() {
             <p className="text-[11px] text-muted-foreground leading-relaxed">
               {isRTL ? "قم بتحميل بنوك مصطلحات رسمية مصدقة للبحث الدقيق." : "Download strict authenticated on-device term-to-term reference datasets."}
             </p>
-            
-            <div className="space-y-2 pt-2">
-              {[
-                { id: "wipo", label: "WIPO Pearl Patent (UN IP)", desc: "Legal IP patents dictionary (~100 entries)" },
-                { id: "microsoft", label: "Microsoft Tech Terminology", desc: "Software, Cloud and localization terminology" }
-              ].map((db) => {
-                const isLoaded = activeDb === db.id;
-                const isDownloading = downloadingDb === db.id;
 
-                return (
-                  <div key={db.id} className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border/50 text-xs">
-                    <div>
-                      <div className="font-bold text-foreground">{db.label}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{db.desc}</div>
-                    </div>
-                    {isDownloading ? (
-                      <span className="text-primary font-bold animate-pulse font-mono text-[10px]">{importProgress}%</span>
-                    ) : isLoaded ? (
-                      <span className="text-emerald-500 font-bold font-mono text-[10px]">{isRTL ? "نشط" : "Active"}</span>
-                    ) : (
-                      <button
-                        onClick={() => simulateDownloadDB(db.id)}
-                        className="p-1 px-2.5 rounded bg-primary/10 text-primary hover:bg-primary/20 text-[10.5px] font-bold cursor-pointer transition-all"
-                      >
-                        {isRTL ? "تنزيل" : "Download"}
-                      </button>
-                    )}
+            <div className="space-y-2 pt-2">
+              {REFERENCE_DBS.filter((db) => db.id === "wipo" || db.id === "microsoft").map((db) => (
+                <div key={db.id} className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border/50 text-xs">
+                  <div>
+                    <div className="font-bold text-foreground">{db.label}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{db.desc}</div>
                   </div>
-                );
-              })}
+                  {renderDbAction(db.id)}
+                </div>
+              ))}
             </div>
           </div>
 
@@ -340,33 +496,15 @@ export function GlossaryView() {
             </p>
 
             <div className="space-y-2 pt-2">
-              {[
-                { id: "opus", label: "OPUS Wikipedia Parallel Corpus", desc: "Open encyclopedic bilingual data (~400 entries)" }
-              ].map((db) => {
-                const isLoaded = activeDb === db.id;
-                const isDownloading = downloadingDb === db.id;
-
-                return (
-                  <div key={db.id} className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border/50 text-xs">
-                    <div>
-                      <div className="font-bold text-foreground">{db.label}</div>
-                      <div className="text-[10px] text-muted-foreground mt-0.5">{db.desc}</div>
-                    </div>
-                    {isDownloading ? (
-                      <span className="text-primary font-bold animate-pulse font-mono text-[10px]">{importProgress}%</span>
-                    ) : isLoaded ? (
-                      <span className="text-emerald-500 font-bold font-mono text-[10px]">{isRTL ? "نشط" : "Active"}</span>
-                    ) : (
-                      <button
-                        onClick={() => simulateDownloadDB(db.id)}
-                        className="p-1 px-2.5 rounded bg-primary/10 text-primary hover:bg-primary/20 text-[10.5px] font-bold cursor-pointer transition-all"
-                      >
-                        {isRTL ? "تنزيل" : "Download"}
-                      </button>
-                    )}
+              {REFERENCE_DBS.filter((db) => db.id === "opus").map((db) => (
+                <div key={db.id} className="flex items-center justify-between p-2.5 rounded-lg bg-background border border-border/50 text-xs">
+                  <div>
+                    <div className="font-bold text-foreground">{db.label}</div>
+                    <div className="text-[10px] text-muted-foreground mt-0.5">{db.desc}</div>
                   </div>
-                );
-              })}
+                  {renderDbAction(db.id)}
+                </div>
+              ))}
             </div>
           </div>
         </div>
@@ -386,7 +524,7 @@ export function GlossaryView() {
 
           <div className="bg-surface border border-border rounded-xl overflow-hidden shadow-sm">
             <table className="w-full text-xs text-left" style={{ textAlign: isRTL ? "right" : "left" }}>
-              <thead className="bg-[#1e1e1e]/2 bg-muted/20 border-b border-border/50 text-[10.5px] text-muted-foreground font-semibold">
+              <thead className="bg-muted/20 border-b border-border/50 text-[10.5px] text-muted-foreground font-semibold">
                 <tr>
                   <th className="px-5 py-3 uppercase tracking-wider">{isRTL ? "المصطلح الإنكليزي" : "English Term / Source"}</th>
                   <th className="px-1 py-3 text-center">→</th>
@@ -404,43 +542,100 @@ export function GlossaryView() {
                           {isRTL ? "لم يتم العثور على مصطلحات مطابقة" : "No matching terminology found"}
                         </p>
                         <p className="text-[10px] opacity-70">
-                          {isRTL 
-                            ? "قم برفع ملف JSON مخصص أو تنزيل بنك مصطلحات مرجعي لتغذية قاعدة بياناتك المترجمة." 
+                          {isRTL
+                            ? "قم برفع ملف JSON مخصص أو تنزيل بنك مصطلحات مرجعي لتغذية قاعدة بياناتك المترجمة."
                             : "Upload a terminology JSON file or select and download a pre-loaded collection to seed your glossary."}
                         </p>
                       </div>
                     </td>
                   </tr>
                 ) : (
-                  filteredEntries.slice(0, 100).map((entry) => (
-                    <tr key={entry.id} className="hover:bg-muted/10 transition-colors">
-                      <td className="px-5 py-3 font-mono text-foreground font-medium">{entry.source_term}</td>
-                      <td className="px-1 py-3 text-center text-muted-foreground/30 font-medium">→</td>
-                      <td className="px-5 py-3 text-foreground font-semibold" dir="rtl">{entry.target_term}</td>
-                      <td className="px-4 py-3 text-center">
-                        <button
-                          onClick={async () => {
-                            if (entry.id) {
-                              await removeGlossary(entry.id);
-                              await loadGlossaryEntries();
-                            }
-                          }}
-                          className="p-1 rounded text-red-500 hover:bg-red-500/10 cursor-pointer"
-                          title={isRTL ? "حذف المصطلح" : "Delete Term"}
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </td>
-                    </tr>
-                  ))
+                  filteredEntries.slice(0, 100).map((entry) => {
+                    const isEditing = editingId === entry.id;
+                    return (
+                      <tr key={entry.id} className="hover:bg-muted/10 transition-colors">
+                        {isEditing ? (
+                          <>
+                            <td className="px-3 py-2">
+                              <input
+                                type="text"
+                                value={editDraft.source_term}
+                                onChange={(e) => setEditDraft({ ...editDraft, source_term: e.target.value })}
+                                className="w-full bg-background border border-primary/50 rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
+                                dir="ltr"
+                                autoFocus
+                              />
+                            </td>
+                            <td className="px-1 py-3 text-center text-muted-foreground/30 font-medium">→</td>
+                            <td className="px-3 py-2">
+                              <input
+                                type="text"
+                                value={editDraft.target_term}
+                                onChange={(e) => setEditDraft({ ...editDraft, target_term: e.target.value })}
+                                className="w-full bg-background border border-primary/50 rounded px-2 py-1 text-xs text-foreground focus:outline-none focus:border-primary"
+                                dir="rtl"
+                              />
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={saveEdit}
+                                  className="p-1 rounded text-emerald-500 hover:bg-emerald-500/10 cursor-pointer"
+                                  title={isRTL ? "حفظ" : "Save"}
+                                >
+                                  <Save className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={cancelEdit}
+                                  className="p-1 rounded text-muted-foreground hover:bg-muted cursor-pointer"
+                                  title={isRTL ? "إلغاء" : "Cancel"}
+                                >
+                                  <X className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        ) : (
+                          <>
+                            <td className="px-5 py-3 font-mono text-foreground font-medium">{entry.source_term}</td>
+                            <td className="px-1 py-3 text-center text-muted-foreground/30 font-medium">→</td>
+                            <td className="px-5 py-3 text-foreground font-semibold" dir="rtl">{entry.target_term}</td>
+                            <td className="px-4 py-3 text-center">
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  onClick={() => beginEdit(entry)}
+                                  className="p-1 rounded text-primary hover:bg-primary/10 cursor-pointer"
+                                  title={isRTL ? "تحرير المصطلح" : "Edit Term"}
+                                >
+                                  <Pencil className="w-3.5 h-3.5" />
+                                </button>
+                                <button
+                                  onClick={async () => {
+                                    if (entry.id) {
+                                      await removeGlossary(entry.id);
+                                      await loadGlossaryEntries();
+                                    }
+                                  }}
+                                  className="p-1 rounded text-red-500 hover:bg-red-500/10 cursor-pointer"
+                                  title={isRTL ? "حذف المصطلح" : "Delete Term"}
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </td>
+                          </>
+                        )}
+                      </tr>
+                    );
+                  })
                 )}
               </tbody>
             </table>
 
             {filteredEntries.length > 100 && (
               <div className="bg-muted/10 p-2 text-center text-[10px] text-muted-foreground border-t border-border/40">
-                {isRTL 
-                  ? `يعرض أول 100 من أصل ${filteredEntries.length} نتيجة` 
+                {isRTL
+                  ? `يعرض أول 100 من أصل ${filteredEntries.length} نتيجة`
                   : `Showing first 100 of ${filteredEntries.length} terminology entries`}
               </div>
             )}

@@ -38,6 +38,14 @@ export interface GlossaryEntry {
   domain?: string;
   notes?: string;
   created_at?: string;
+  /**
+   * Optional reference-DB tag. When set, this entry belongs to a
+   * downloadable reference DB (e.g. "wipo", "microsoft", "opus") and
+   * can be removed as a group when the user toggles that DB off via
+   * the "Use" button. Entries added manually or via JSON upload do
+   * not have this field set. See PHASE 2 task 2.3.
+   */
+  source_db?: string;
 }
 
 export interface SegmentEntry {

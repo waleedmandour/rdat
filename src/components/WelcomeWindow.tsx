@@ -14,6 +14,16 @@ import { ChevronLeft, ChevronRight, Check, Server, Download, Play } from "lucide
  *
  * Stored in localStorage so it only shows once. User can re-trigger
  * from Settings if needed.
+ *
+ * PHASE 2 task 2.2 — THEME-AWARENESS FLAGGED FOR PROJECT OWNER:
+ * This splash is intentionally always-dark (bg-[#0A0B0E], bg-black/80
+ * overlay, text-white/NN throughout). It has a distinct visual identity
+ * (gradient progress bar, hero iconography) and is shown only once per
+ * install. Converting it to follow the theme toggle would require
+ * redesigning every text-white/NN opacity layer for a light-mode
+ * counterpart. If the project owner decides it should follow the
+ * toggle, the conversion is mechanical but spread across ~30 class
+ * strings in this file. Until then it stays always-dark by design.
  */
 const WELCOME_SEEN_KEY = "rdat_welcome_seen";
 

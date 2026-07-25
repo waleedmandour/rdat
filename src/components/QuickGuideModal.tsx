@@ -95,7 +95,7 @@ export function QuickGuideModal({ open, onClose }: QuickGuideModalProps) {
               href="https://github.com/waleedmandour/rdat"
               target="_blank"
               rel="noreferrer"
-              className="flex items-center gap-1 text-[9.5px] font-bold text-slate-300 hover:text-white border dark:border-white/5 border-border px-2 py-1 rounded-lg dark:bg-[#111318] cursor-pointer"
+              className="flex items-center gap-1 text-[9.5px] font-bold text-muted-foreground hover:text-foreground border dark:border-white/5 border-border px-2 py-1 rounded-lg bg-surface cursor-pointer"
             >
               <Github className="w-3 h-3" />
               <span>rdat</span>

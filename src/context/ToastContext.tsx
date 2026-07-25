@@ -28,10 +28,10 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
       <div className="fixed bottom-16 right-6 z-50 flex flex-col gap-2 max-w-sm pointer-events-none select-none">
         <AnimatePresence>
           {toasts.map((toast) => {
-            // Consistent dark background for ALL toast types.
-            // Uses the app's surface color with colored left border
-            // to distinguish types, instead of different backgrounds
-            // that clash with the dark theme.
+            // Pick the icon + coloured left-border for each toast type.
+            // The toast body itself uses theme tokens (bg-surface /
+            // text-foreground) so it looks correct in both light and
+            // dark mode. See PHASE 2 task 2.2.
             let icon = <Info className="w-4 h-4 text-blue-400" />;
             let borderColor = "border-l-blue-500";
 
@@ -52,15 +52,24 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
                 initial={{ opacity: 0, y: 20, scale: 0.95 }}
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95, transition: { duration: 0.15 } }}
-                className={`pointer-events-auto flex items-start gap-3 p-4 rounded-xl border border-white/10 border-l-4 ${borderColor} bg-[#1a1d23] shadow-lg backdrop-blur-md`}
+                // Theme-aware toast background. Previously this was a
+                // hardcoded bg-[#1a1d23] + text-white that stayed dark
+                // even in light mode, which clashed with the rest of
+                // the app. Switched to bg-surface / text-foreground so
+                // toasts follow the active theme. The coloured left
+                // border still distinguishes the toast type. If you
+                // want the always-dark look back, revert to:
+                //   bg-[#1a1d23] text-white border-white/10
+                // See PHASE 2 task 2.2.
+                className={`pointer-events-auto flex items-start gap-3 p-4 rounded-xl border border-border border-l-4 ${borderColor} bg-surface text-foreground shadow-lg backdrop-blur-md`}
               >
                 <div className="mt-0.5 shrink-0">{icon}</div>
-                <div className="flex-1 text-xs font-semibold leading-relaxed pr-2 text-white">
+                <div className="flex-1 text-xs font-semibold leading-relaxed pr-2">
                   {toast.message}
                 </div>
                 <button
                   onClick={() => removeToast(toast.id)}
-                  className="shrink-0 p-0.5 hover:bg-white/10 rounded transition-colors text-white/60 hover:text-white cursor-pointer"
+                  className="shrink-0 p-0.5 hover:bg-muted rounded transition-colors text-muted-foreground hover:text-foreground cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>

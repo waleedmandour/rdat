@@ -18,7 +18,7 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
   const icons = [Languages, BookOpen, Sparkles];
 
   return (
-    <div className="h-full overflow-y-auto dark:bg-[#0A0B0E] bg-background p-6 md:p-12 select-none" dir={isRTL ? "rtl" : "ltr"}>
+    <div className="h-full overflow-y-auto bg-background p-6 md:p-12 select-none" dir={isRTL ? "rtl" : "ltr"}>
       <div className="max-w-4xl mx-auto space-y-12">
         {/* Hero Header */}
         <div className="text-center space-y-4">
@@ -69,7 +69,7 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
         </div>
 
         {/* Keyboard Shortcuts Section */}
-        <div className="dark:bg-[#111318] bg-surface border dark:border-white/5 border-border p-6 rounded-2xl space-y-4">
+        <div className="dark:bg-surface bg-surface border dark:border-white/5 border-border p-6 rounded-2xl space-y-4">
           <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500 flex items-center gap-2">
             <Command className="w-4 h-4 text-primary" />
             <span>{t("welcome.shortcuts")}</span>
@@ -78,7 +78,7 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
             {((t("welcome.shortcutList") as any) || []).map((sc: any, idx: number) => (
               <div
                 key={idx}
-                className="flex items-center justify-between p-2.5 rounded-xl bg-background/50 dark:bg-[#0A0B0E] border dark:border-white/5 border-border/50 font-mono"
+                className="flex items-center justify-between p-2.5 rounded-xl bg-background/50 border dark:border-white/5 border-border/50 font-mono"
               >
                 <span className="text-slate-400 text-[11px]">{sc.action}</span>
                 <kbd className="dark:bg-white/10 bg-surface border dark:border-white/10 border-border px-2 py-0.5 rounded text-[10px] text-foreground font-black shadow-sm">
@@ -111,7 +111,7 @@ export function WelcomeTab({ onStart }: WelcomeTabProps) {
             </span>
           </div>
 
-          <div className="max-w-xl mx-auto dark:bg-[#111318]/50 bg-surface border dark:border-white/5 border-border p-5 rounded-2xl space-y-3 shadow-xs text-left" style={{ textAlign: isRTL ? "right" : "left" }}>
+          <div className="max-w-xl mx-auto dark:bg-surface/50 bg-surface border dark:border-white/5 border-border p-5 rounded-2xl space-y-3 shadow-xs text-left" style={{ textAlign: isRTL ? "right" : "left" }}>
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 select-text">
               <div className="space-y-0.5">
                 <div className="text-xs font-black text-foreground">
@@ -256,7 +256,7 @@ function SetupChecklist() {
   const completedCount = steps.filter((s) => s.done).length;
 
   return (
-    <div className="dark:bg-[#111318] bg-surface border dark:border-white/5 border-border p-5 rounded-2xl space-y-4">
+    <div className="dark:bg-surface bg-surface border dark:border-white/5 border-border p-5 rounded-2xl space-y-4">
       <div className="flex items-center justify-between">
         <h3 className="font-bold text-xs uppercase tracking-widest text-slate-500 flex items-center gap-2">
           <Sparkles className="w-4 h-4 text-primary" />
@@ -291,7 +291,7 @@ function SetupChecklist() {
             className={`flex items-start gap-3 p-3 rounded-xl border transition-all ${
               step.done
                 ? "border-emerald-500/20 bg-emerald-500/5"
-                : "border-border dark:border-white/5 bg-background/50 dark:bg-[#0A0B0E]"
+                : "border-border dark:border-white/5 bg-background/50"
             }`}
           >
             <div className={`mt-0.5 shrink-0 ${step.done ? "text-emerald-500" : "text-muted-foreground"}`}>
