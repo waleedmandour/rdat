@@ -44,13 +44,21 @@ jobs:
 
       # Audit fix #14: scan Rust dependencies for known RUSTSEC advisories.
       # Runs cargo-audit against src-tauri/Cargo.lock. Fails the build if
-      # any advisory is found, so a vulnerable transitive dep can't ship.
+      # any actual vulnerability (not just "unmaintained" warnings) is found.
+      #
+      # Note: we do NOT use --deny warnings here because Tauri 2 on Linux
+      # transitively pulls in the GTK3 bindings (gtk, gtk-sys, gtk3-macros,
+      # atk, sourceview, etc.) which are flagged as "unmaintained" — they
+      # were superseded by GTK4 but Tauri 2.x hasn't migrated yet. These
+      # are informational advisories, not exploitable vulnerabilities.
+      # Using --deny warnings would fail the build on every push until
+      # Tauri 3 ships. We deny only actual vulnerabilities.
       - name: Install cargo-audit
         uses: taiki-e/install-action@cargo-audit
 
-      - name: Run cargo-audit on Rust dependencies
+      - name: Run cargo-audit on Rust dependencies (vulnerabilities only)
         working-directory: src-tauri
-        run: cargo audit --deny warnings
+        run: cargo audit
 
       - name: Upload Vite build artifact
         uses: actions/upload-artifact@v4
