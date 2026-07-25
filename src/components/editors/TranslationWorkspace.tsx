@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback, useRef } from "react"
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 import { useWorkspaceStore } from "../../stores/workspace-store";
-import type { TranslationDirection } from "../../stores/workspace-store";
 import { useDualStorage } from "../../hooks/useDualStorage";
 import { putToStore, getAllofStore } from "../../lib/dual-storage";
 import { SourceEditor } from "./SourceEditor";
@@ -34,7 +33,6 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
 
   const {
     sourceText,
-    setSourceText,
     targetTexts,
     setTargetTexts,
     setTargetTextAtIndex,
@@ -48,7 +46,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
 
   const isArToEn = direction === "ar-en";
 
-  const { segmentCount, refreshCounts } = useDualStorage();
+  const { refreshCounts } = useDualStorage();
 
   // Split original English text into logical segment lines
   const sentences = useMemo(() => {
@@ -165,7 +163,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
 
     setTutorLoading(true);
     try {
-      const response = await generateTutorExplanation(activeSource, activeTarget, locale);
+      const response = await generateTutorExplanation(activeSource, activeTarget, locale, direction);
       if (response) {
         setTutorAnalyses((prev) => ({
           ...prev,
@@ -690,7 +688,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
 
             {!tutorLoading && !tutorAnalyses[currentSegmentIndex] && (
               <div className="p-6 border border-dashed rounded-xl border-border bg-white/[0.01] text-center space-y-2 select-none">
-                <GraduationCap className="w-8 h-8 text-slate-600 mx-auto" />
+                <GraduationCap className="w-8 h-8 text-muted-foreground mx-auto" />
                 <p className="text-[10.5px] font-semibold text-muted-foreground">
                   {isRTL 
                     ? "لم يتم طلب تقييم لهذا المقطع بعد. اكتب ترجمتك المقترحة ثم اضغط على زر التقييم أعلاه!"

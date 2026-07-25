@@ -1,6 +1,7 @@
 import React, { useState, useCallback, useEffect } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useDualStorage } from "../hooks/useDualStorage";
+import { useWorkspaceStore } from "../stores/workspace-store";
 import {
   Upload,
   Database,
@@ -83,6 +84,22 @@ export function GlossaryView() {
   const { locale, t } = useLanguage();
   const isRTL = locale === "ar";
 
+  // Active translation direction — used to set source_lang/target_lang
+  // correctly on manually-added and JSON-uploaded entries (PHASE 3
+  // task 3.2). Reference-DB entries and the SEED_CORPUS loader keep
+  // their hardcoded "en"/"ar" because those datasets are intrinsically
+  // English-source → Arabic-target regardless of the active direction.
+  const direction = useWorkspaceStore((s) => s.direction);
+  const isArToEn = direction === "ar-en";
+  const activeSourceLang = isArToEn ? "ar" : "en";
+  const activeTargetLang = isArToEn ? "en" : "ar";
+  const activeSourceLabel = isArToEn
+    ? (isRTL ? "المصطلح بالعربية" : "Arabic term")
+    : (isRTL ? "المصطلح بالإنجليزية" : "English term");
+  const activeTargetLabel = isArToEn
+    ? (isRTL ? "الترجمة بالإنجليزية" : "English translation")
+    : (isRTL ? "الترجمة بالعربية" : "Arabic translation");
+
   const {
     glossaryCount,
     addGlossary,
@@ -146,17 +163,28 @@ export function GlossaryView() {
         }
 
         const validEntries: GlossaryEntry[] = rawData.map((item, idx) => {
-          const enVal = item.en || item.source_term || item.source || "";
-          const arVal = item.ar || item.target_term || item.target || "";
-          if (!enVal || !arVal) {
-            throw new Error(`Row ${idx + 1} is missing a valid 'en' or 'ar' value.`);
+          // Field-name flexibility: accept any of {en, source_term, source}
+          // for the source side and {ar, target_term, target} for the
+          // target side. The semantic is "first value = source, second
+          // value = target" regardless of which language that is — the
+          // language tags come from the active direction (or from the
+          // row's explicit source_lang/target_lang fields if present).
+          // See PHASE 3 task 3.2.
+          const srcVal = item.en || item.source_term || item.source || "";
+          const tgtVal = item.ar || item.target_term || item.target || "";
+          if (!srcVal || !tgtVal) {
+            throw new Error(`Row ${idx + 1} is missing a valid source or target value.`);
           }
           return {
             id: Date.now() + idx,
-            source_term: String(enVal).trim(),
-            target_term: String(arVal).trim(),
-            source_lang: "en",
-            target_lang: "ar",
+            source_term: String(srcVal).trim(),
+            target_term: String(tgtVal).trim(),
+            // Honour explicit per-row language tags if the JSON
+            // provides them; otherwise derive from the active
+            // workspace direction so an AR→EN user uploading an
+            // AR→EN JSON gets source_lang="ar", target_lang="en".
+            source_lang: item.source_lang || activeSourceLang,
+            target_lang: item.target_lang || activeTargetLang,
             pos: item.pos || item.type || "noun",
             domain: item.domain || "general"
           };
@@ -178,7 +206,7 @@ export function GlossaryView() {
 
       e.target.value = "";
     },
-    [importGlossary, loadGlossaryEntries]
+    [importGlossary, loadGlossaryEntries, activeSourceLang, activeTargetLang]
   );
 
   /**
@@ -257,8 +285,12 @@ export function GlossaryView() {
       await addGlossary({
         source_term: newTerm.source.trim(),
         target_term: newTerm.target.trim(),
-        source_lang: "en",
-        target_lang: "ar",
+        // Derive language tags from the active workspace direction so
+        // an AR→EN user adding a term gets source_lang="ar",
+        // target_lang="en". Previously hardcoded to "en"/"ar".
+        // See PHASE 3 task 3.2.
+        source_lang: activeSourceLang,
+        target_lang: activeTargetLang,
         pos: "term",
         domain: newTerm.domain || "general",
       });
@@ -267,7 +299,7 @@ export function GlossaryView() {
     } catch (e) {
       console.error("[Glossary] Add term failed:", e);
     }
-  }, [newTerm, addGlossary, loadGlossaryEntries]);
+  }, [newTerm, addGlossary, loadGlossaryEntries, activeSourceLang, activeTargetLang]);
 
   /** Begin inline editing for a row. Pre-fills the draft from the entry. */
   const beginEdit = useCallback((entry: GlossaryEntry) => {
@@ -429,17 +461,17 @@ export function GlossaryView() {
               type="text"
               value={newTerm.source}
               onChange={(e) => setNewTerm({ ...newTerm, source: e.target.value })}
-              placeholder={isRTL ? "المصطلح بالإنجليزية" : "English term"}
+              placeholder={activeSourceLabel}
               className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/50"
-              dir="ltr"
+              dir={isArToEn ? "rtl" : "ltr"}
             />
             <input
               type="text"
               value={newTerm.target}
               onChange={(e) => setNewTerm({ ...newTerm, target: e.target.value })}
-              placeholder={isRTL ? "المصطلح بالعربية" : "Arabic translation"}
+              placeholder={activeTargetLabel}
               className="flex-1 bg-background border border-border rounded-lg px-3 py-2 text-xs text-foreground focus:outline-none focus:border-primary/50"
-              dir="rtl"
+              dir={isArToEn ? "ltr" : "rtl"}
             />
             <input
               type="text"

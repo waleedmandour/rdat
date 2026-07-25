@@ -11,7 +11,6 @@ import {
   cachePrefetch,
 } from "../../lib/local-llm-engine";
 import { getActiveAdapterSync, getActiveAdapter, isTauriEnvironment } from "../../lib/adapters";
-import type { LLMAdapter } from "../../lib/llm-adapter";
 import { useGemini } from "../../hooks/useGemini";
 import { useSettingsStore } from "../../stores/settings-store";
 import { useWorkspaceStore } from "../../stores/workspace-store";
@@ -95,7 +94,7 @@ export function TargetEditor({
   const { locale } = useLanguage();
   const isRTL = locale === "ar";
 
-  const { generateBurst, loading } = useGemini();
+  const { generateBurst } = useGemini();
   const { engineMode, useCloudFallback, loadedModel } = useSettingsStore();
   const direction = useWorkspaceStore((s) => s.direction);
   const isTargetRTL = direction === "en-ar"; // Target is Arabic (RTL) for EN-AR, English (LTR) for AR-EN

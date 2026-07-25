@@ -23,7 +23,6 @@ import type {
   TranslateOptions,
   StateChangeCallback,
 } from "../llm-adapter";
-import { MODEL_MAP } from "../local-llm-engine";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import type { TranslationDirection } from "../../stores/workspace-store";
 

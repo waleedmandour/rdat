@@ -2,15 +2,22 @@
  * Vercel Serverless Function: /api/translate/tutor-explain
  *
  * Provides pedagogical AI translation feedback by analysing an
- * English→Arabic translation attempt. Returns rating, grade,
- * term-by-term analysis, and common pitfalls.
+ * AR↔EN translation attempt. Returns rating, grade, term-by-term
+ * analysis, and common pitfalls.
+ *
+ * Direction-aware (PHASE 3 task 3.1): accepts a `direction:
+ * "en-ar" | "ar-en"` field in the request body. The prompt branches
+ * on direction so the source/target labelling matches what the user
+ * is actually doing. Defaults to "en-ar" when the field is absent
+ * for backward compatibility with older clients.
  *
  * Uses the modern Web Standard fetch handler (ESM-compatible).
  *
- * Body: { sourceText: string, targetText: string, locale?: "en"|"ar", geminiApiKey?: string }
+ * Body: { sourceText: string, targetText: string, locale?: "en"|"ar", direction?: "en-ar"|"ar-en", geminiApiKey?: string }
  * Response: { rating, grade, explanation, termsAnalysed, pitfalls }
  */
 import { getAI } from "../_lib/gemini";
+import { buildTutorPrompt, type TranslationDirection } from "../_lib/prompts";
 
 export default {
   async fetch(request: Request) {
@@ -19,11 +26,12 @@ export default {
     }
 
     try {
-      const { sourceText, targetText, geminiApiKey, locale } = await request.json() as {
+      const { sourceText, targetText, geminiApiKey, locale, direction } = await request.json() as {
         sourceText?: string;
         targetText?: string;
         geminiApiKey?: string;
         locale?: string;
+        direction?: TranslationDirection;
       };
 
       if (!sourceText || !targetText) {
@@ -33,28 +41,13 @@ export default {
         );
       }
 
+      // Validate direction — fall back to "en-ar" for unknown / missing values.
+      const dir: TranslationDirection =
+        direction === "ar-en" || direction === "en-ar" ? direction : "en-ar";
+
       const ai = getAI(geminiApiKey);
       const isRTL = locale === "ar";
-
-      const systemPrompt = `You are an elite, pedagogical translation professor teaching Arabic-English professional translation.
-Your task is to analyze an English source sentence and an Arabic translation attempt, and provide rich pedagogical feedback and corrections.
-
-English Source: "${sourceText}"
-Arabic Translation Attempt: "${targetText}"
-
-Respond with a strictly formatted JSON object matching this structure:
-{
-  "rating": 90, // integer from 0 to 100
-  "grade": "A", // letter grade (e.g., A+, B-, C)
-  "explanation": "A direct feedback paragraph explaining style and grammatical cohesion in the language designated by isRTL=${isRTL}. Speak affectionately as a helpful coaching tutor.",
-  "termsAnalysed": [
-    { "term": "English Term", "analysis": "Arabic mapping explanation and contextual fit analysis." }
-  ],
-  "pitfalls": "Common translation traps, literal translation failures, or false friends to watch out for in this sentence."
-}
-
-Ensure your entire explanation, analyses, and comments are returned in ${isRTL ? "Arabic" : "English"}.
-Do NOT wrap the response in markdown quotes or code fences. Output ONLY the raw JSON block.`;
+      const systemPrompt = buildTutorPrompt(sourceText, targetText, isRTL, dir);
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",

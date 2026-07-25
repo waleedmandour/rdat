@@ -46,6 +46,13 @@ export interface GeminiTutorRequest {
   targetText: string;
   locale: "en" | "ar";
   geminiApiKey: string;
+  /**
+   * Translation direction of the segment being analysed. The tutor
+   * prompt branches on this so it frames the analysis correctly for
+   * both EN→AR and AR→EN attempts. Defaults to "en-ar" for backward
+   * compatibility with older callers. See PHASE 3 task 3.1.
+   */
+  direction?: TranslationDirection;
 }
 
 export interface GeminiBurstResponse {
@@ -146,12 +153,35 @@ Provide a fluent translation in ${labels.professionalTarget}.
 Return ONLY the raw ${labels.targetLang} translation. No quotes, no explanations, no boilerplate.`;
 }
 
-function buildTutorPrompt(sourceText: string, targetText: string, isRTL: boolean): string {
+/**
+ * Build the AI Translation Tutor prompt. Direction-aware since PHASE 3
+ * task 3.1: previously the prompt always framed the analysis as
+ * "Arabic-English professional translation" with the source labelled
+ * "English Source" and the target labelled "Arabic Translation Attempt",
+ * which was wrong for AR→EN attempts. The prompt now branches on
+ * direction so the framing matches what the user is actually doing.
+ *
+ * The `isRTL` flag controls the *output language* of the tutor's
+ * feedback (Arabic when the UI is RTL, English otherwise) — that's
+ * separate from the translation direction.
+ */
+function buildTutorPrompt(
+  sourceText: string,
+  targetText: string,
+  isRTL: boolean,
+  direction: TranslationDirection = "en-ar"
+): string {
+  const isArToEn = direction === "ar-en";
+  const sourceLang = isArToEn ? "Arabic" : "English";
+  const targetLang = isArToEn ? "English" : "Arabic";
+  // The course title stays "Arabic-English professional translation"
+  // in both directions because the tutor teaches bidirectional
+  // AR↔EN translation; only the source/target labelling changes.
   return `You are an elite, pedagogical translation professor teaching Arabic-English professional translation.
-Your task is to analyze an English source sentence and an Arabic translation attempt, and provide rich pedagogical feedback and corrections.
+Your task is to analyze a ${sourceLang} source sentence and a ${targetLang} translation attempt, and provide rich pedagogical feedback and corrections.
 
-English Source: "${sourceText}"
-Arabic Translation Attempt: "${targetText}"
+${sourceLang} Source: "${sourceText}"
+${targetLang} Translation Attempt: "${targetText}"
 
 Respond with a strictly formatted JSON object matching this structure:
 {
@@ -159,7 +189,7 @@ Respond with a strictly formatted JSON object matching this structure:
   "grade": "A",
   "explanation": "A direct feedback paragraph explaining style and grammatical cohesion in the language designated by isRTL=${isRTL}. Speak affectionately as a helpful coaching tutor.",
   "termsAnalysed": [
-    { "term": "English Term", "analysis": "Arabic mapping explanation and contextual fit analysis." }
+    { "term": "${sourceLang} Term", "analysis": "${targetLang} mapping explanation and contextual fit analysis." }
   ],
   "pitfalls": "Common translation traps, literal translation failures, or false friends to watch out for in this sentence."
 }
@@ -220,7 +250,8 @@ async function tauriGeminiFull(req: GeminiFullRequest): Promise<GeminiFullRespon
 async function tauriGeminiTutor(req: GeminiTutorRequest): Promise<GeminiTutorResponse> {
   const invoke = await getInvoke();
   const isRTL = req.locale === "ar";
-  const systemPrompt = buildTutorPrompt(req.sourceText, req.targetText, isRTL);
+  const direction = req.direction || "en-ar";
+  const systemPrompt = buildTutorPrompt(req.sourceText, req.targetText, isRTL, direction);
   const result = await invoke("gemini_translate", {
     req: {
       model: "gemini-2.5-flash",

@@ -58,7 +58,7 @@ export interface ModelInfo {
 }
 
 export interface TranslateOptions {
-  /** English source text to translate. */
+  /** Source text to translate (language depends on workspace direction). */
   sourceText: string;
   /** Already-typed Arabic prefix to condition on (may be empty). */
   targetPrefix?: string;

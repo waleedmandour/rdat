@@ -1,4 +1,4 @@
-import { TMEntry, GlossaryEntry, SegmentEntry, StoreName } from "../types";
+import { GlossaryEntry, StoreName } from "../types";
 
 const DB_NAME = "rdat_copilot_db";
 const DB_VERSION = 2;
@@ -14,7 +14,7 @@ export function openDB(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = (event) => {
+    request.onupgradeneeded = () => {
       const db = request.result;
       if (!db.objectStoreNames.contains("tm_entries")) {
         db.createObjectStore("tm_entries", { keyPath: "id", autoIncrement: true });

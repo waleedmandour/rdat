@@ -6,7 +6,6 @@ import {
   Cpu,
   Download,
   Check,
-  Sparkles,
   Play,
   AlertCircle,
   RefreshCw,
@@ -15,7 +14,6 @@ import {
   ServerCrash,
   Loader2,
   ExternalLink,
-  Zap,
 } from "lucide-react";
 import { cn } from "../lib/utils";
 import { getActiveAdapter, getActiveAdapterSync, resetAdapter, isTauriEnvironment } from "../lib/adapters";
@@ -69,7 +67,6 @@ export function AiModelsView() {
   const [adapterLoading, setAdapterLoading] = useState(getActiveAdapterSync() === null);
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [daemonHealthy, setDaemonHealthy] = useState<boolean>(false);
-  const [adapterState, setAdapterState] = useState<string>("idle");
   const [adapterError, setAdapterError] = useState<string | null>(null);
   const [healthDiagnostics, setHealthDiagnostics] = useState<HealthDiagnostics | null>(null);
 
@@ -112,7 +109,6 @@ export function AiModelsView() {
         // Subscribe to adapter state changes
         const unsubscribe = activeAdapter.onStateChange((state, progress, error) => {
           if (cancelled) return;
-          setAdapterState(state);
           setLoadingProgress(progress);
           setAdapterError(error);
           if (state === "ready") {
@@ -343,7 +339,6 @@ export function AiModelsView() {
         <EngineStatusBanner
           adapter={adapter}
           daemonHealthy={daemonHealthy}
-          adapterState={adapterState}
           adapterError={adapterError}
           loadedModel={loadedModel}
           isRTL={isRTL}
@@ -480,7 +475,6 @@ export function AiModelsView() {
 function EngineStatusBanner({
   adapter,
   daemonHealthy,
-  adapterState,
   adapterError,
   loadedModel,
   isRTL,
@@ -489,7 +483,6 @@ function EngineStatusBanner({
 }: {
   adapter: LLMAdapter | null;
   daemonHealthy: boolean;
-  adapterState: string;
   adapterError: string | null;
   loadedModel: string;
   isRTL: boolean;
@@ -561,9 +554,6 @@ function EngineStatusBanner({
   }
 
   const isOllama = adapter.id === "ollama";
-  const statusColor = daemonHealthy
-    ? "emerald"
-    : "amber";
   const statusText = daemonHealthy
     ? (isRTL ? "متصل" : "Connected")
     : (isRTL ? "غير متصل" : "Not running");

@@ -119,7 +119,12 @@ export function useGemini() {
   );
 
   const generateTutorExplanation = useCallback(
-    async (sourceText: string, targetText: string, locale: "en" | "ar"): Promise<TutorAnalysis | null> => {
+    async (
+      sourceText: string,
+      targetText: string,
+      locale: "en" | "ar",
+      direction: TranslationDirection = "en-ar"
+    ): Promise<TutorAnalysis | null> => {
       if (!sourceText.trim() || !targetText.trim()) return null;
 
       setLoading(true);
@@ -130,6 +135,7 @@ export function useGemini() {
           targetText,
           locale,
           geminiApiKey,
+          direction,
         }));
       } catch (err: any) {
         console.error("[useGemini] Tutor call failed:", err);

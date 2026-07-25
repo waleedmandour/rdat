@@ -8,7 +8,7 @@ interface QuickGuideModalProps {
 }
 
 export function QuickGuideModal({ open, onClose }: QuickGuideModalProps) {
-  const { locale, t } = useLanguage();
+  const { locale } = useLanguage();
   const isRTL = locale === "ar";
 
   if (!open) return null;

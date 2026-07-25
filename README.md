@@ -179,6 +179,139 @@ When deployed as a PWA on Vercel, RDAT is a fully installable Progressive Web Ap
 | PWA (optional) | Service Worker + Web App Manifest |
 | Language | TypeScript 5.8 |
 
+---
+
+## Project Structure
+
+```
+rdat/
+├── api/                              # Vercel serverless functions (PWA-mode cloud tier)
+│   ├── _lib/
+│   │   ├── gemini.ts                 # Lazy-init @google/genai SDK; user-key or env-var
+│   │   └── prompts.ts                # Direction-aware prompt builders (burst / full / tutor)
+│   └── translate/
+│       ├── burst.ts                  # /api/translate/burst  — 3-candidate ghost-text suggestions
+│       ├── full.ts                   # /api/translate/full   — single full translation
+│       └── tutor-explain.ts          # /api/translate/tutor-explain — pedagogical feedback (JSON)
+│
+├── src/
+│   ├── components/
+│   │   ├── editors/
+│   │   │   ├── TranslationWorkspace.tsx  # Top-level editor: direction toggle, source/target/tutor layout
+│   │   │   ├── SourceEditor.tsx          # Source panel: import (.txt/.docx), segment list, direction-aware labels
+│   │   │   ├── TargetEditor.tsx          # Target panel: ghost-text rendering, tier fallback, inline pronunciation
+│   │   │   └── index.ts
+│   │   ├── AiModelsView.tsx              # Models panel: Ollama + WebLLM catalog, pull/load/uninstall
+│   │   ├── ApiKeysView.tsx               # API Keys panel: Gemini key entry + cloud-fallback toggle
+│   │   ├── GlossaryView.tsx              # Glossary panel: add/edit/delete, JSON upload, reference-DB download/use
+│   │   ├── InstallPWAButton.tsx          # PWA install prompt (beforeinstallprompt event)
+│   │   ├── OllamaOnboardingModal.tsx     # 3-step skippable Ollama setup modal (Tauri only, first run)
+│   │   ├── QuickGuideModal.tsx           # Keyboard-shortcut reference modal
+│   │   ├── RdatLogo.tsx                  # Inline SVG logo component
+│   │   ├── Settings.tsx                  # Settings panel: UI language, LTE confidence, danger zone
+│   │   ├── Sidebar.tsx                   # Left nav rail: translator / glossary / models / api-keys / settings
+│   │   ├── StatusBar.tsx                 # Bottom status bar: engine, activity, segment count, network
+│   │   ├── WelcomeTab.tsx                # In-app welcome/dashboard tab (shown after onboarding)
+│   │   ├── WelcomeWindow.tsx             # First-launch 3-page onboarding splash (always-dark by design)
+│   │   └── WorkspaceShell.tsx            # App shell: theme toggle, sidebar, route switching, status bar
+│   │
+│   ├── context/
+│   │   ├── LanguageContext.tsx           # i18n provider (EN/AR locale + t() helper)
+│   │   └── ToastContext.tsx              # Toast notification provider (theme-aware, type-coloured borders)
+│   │
+│   ├── hooks/
+│   │   ├── useDualStorage.ts             # IndexedDB CRUD + LTE rebuild + reference-DB download-state
+│   │   ├── useGemini.ts                  # Cloud Gemini hook: burst / full / tutor with retry+backoff
+│   │   ├── useLocalAgent.ts              # Local-agent state hook (legacy, retained for compatibility)
+│   │   ├── useRAG.ts                     # RAG state hook: LTE corpus stats + lteSearch helper
+│   │   └── useWebLLM.ts                  # WebLLM lifecycle hook (load/unload/progress)
+│   │
+│   ├── lib/
+│   │   ├── adapters/
+│   │   │   ├── index.ts                  # Adapter factory: auto-detects Tauri+Ollama vs WebGPU vs null
+│   │   │   ├── ollama-adapter.ts         # OllamaAdapter — Tauri Rust proxy to localhost:11434
+│   │   │   └── web-llm-adapter.ts        # WebLLMAdapter — @mlc-ai/web-llm via WebGPU (PWA fallback)
+│   │   ├── dual-storage.ts               # IndexedDB layer: openDB, put/get/delete, chunked import, sync_meta
+│   │   ├── gemini-direct.ts              # Gemini dispatcher: Tauri invoke vs Vercel fetch; direction-aware prompts
+│   │   ├── llm-adapter.ts                # LLMAdapter interface + shared buildRAGSystemPrompt / buildUserPrompt
+│   │   ├── local-llm-engine.ts           # WebLLM engine wrapper: load/unload, RAG inference, prefetch cache
+│   │   ├── local-translation-engine.ts   # LTE: bidirectional en/ar indexes, n-gram + sentence-split matching
+│   │   ├── seed-corpus.ts                # ~85-entry EN→AR starter corpus (TODO: source a licensed multi-k dict)
+│   │   ├── utils.ts                      # cn() classname merge helper
+│   │   └── vercel-warmup.ts              # Pre-warms Vercel serverless functions on app boot
+│   │
+│   ├── stores/
+│   │   ├── editor-activity-store.ts      # Zustand: typing / suggesting / loading-model / idle (drives status bar)
+│   │   ├── settings-store.ts             # Zustand: engineMode, useCloudFallback, loadedModel, geminiApiKey, theme
+│   │   ├── ui-store.ts                   # Zustand: requestNav() for programmatic panel switches
+│   │   └── workspace-store.ts            # Zustand: sourceText, targetTexts, currentSegmentIndex, direction
+│   │
+│   ├── i18n/
+│   │   └── translations.ts               # EN/AR string tables for every UI label
+│   │
+│   ├── App.tsx                           # Root: theme bootstrap, WelcomeWindow gate, WorkspaceShell mount
+│   ├── main.tsx                          # React entry point
+│   ├── types.ts                          # Shared TS types (GlossaryEntry, SegmentEntry, TMEntry, etc.)
+│   └── index.css                         # Tailwind 4 theme tokens: --bg-color / --fg-color / --surface-color / .dark
+│
+├── src-tauri/                             # Tauri 2 Rust backend (desktop app)
+│   ├── src/
+│   │   ├── main.rs                        # Tauri entry point
+│   │   ├── lib.rs                         # Plugin registration + command registration
+│   │   ├── commands.rs                    # Command dispatcher
+│   │   └── commands/
+│   │       ├── ollama.rs                  # ollama_health / ollama_list_models / ollama_pull_model / ollama_translate
+│   │       └── gemini.rs                  # gemini_translate (reqwest proxy to Gemini REST API)
+│   ├── capabilities/default.json          # Tauri 2 capability manifest (CSP, allowed commands)
+│   ├── Cargo.toml                         # Rust dependencies (tauri, reqwest, tokio, serde)
+│   └── tauri.conf.json                    # Tauri config: app identity, window, bundle targets
+│
+├── public/                                # Static assets served as-is
+│   ├── manifest.webmanifest               # PWA manifest
+│   ├── sw.js                              # Service Worker (network-first nav, cache-first assets)
+│   └── *.png                              # PWA icons (192/512/maskable/source-1024)
+│
+├── docs/                                  # User guide (PDF + HTML, EN + AR)
+├── scripts/                               # Offline smoke tests (bidirectional LTE, IndexedDB persistence)
+├── server.ts                              # Local dev server: Express + Vite HMR + Gemini proxy
+├── vite.config.ts                         # Vite config (React plugin, Tailwind 4 plugin, alias)
+├── vercel.json                            # Vercel deployment config (API routes + SPA rewrite)
+├── tsconfig.json                          # TS config (strict, noUnusedLocals/Parameters)
+└── package.json                           # Scripts: dev / build / lint / tauri:dev / tauri:build
+```
+
+### Key Subsystems
+
+#### Three-Tier Ghost-Text Pipeline
+
+| Tier | File(s) | Role |
+|------|---------|------|
+| **Tier 0 — LTE** | `src/lib/local-translation-engine.ts` | Instant (<5 ms) corpus lookup. Bidirectional `enIndex` + `arIndex`; n-gram + sentence-split fallback. |
+| **Tier 1 — Local LLM** | `src/lib/llm-adapter.ts`, `src/lib/adapters/`, `src/lib/local-llm-engine.ts` | RAG-augmented on-device inference. OllamaAdapter (Tauri) or WebLLMAdapter (PWA); shared `buildRAGSystemPrompt` / `buildUserPrompt` so both backends use identical direction-aware prompts. |
+| **Tier 2 — Cloud Gemini** | `src/lib/gemini-direct.ts`, `api/translate/*.ts` | Cloud fallback. Direction-aware prompt builders in `api/_lib/prompts.ts` are shared between the Vercel functions and the Tauri Rust proxy path. |
+
+#### State Management
+
+| Store | File | Responsibility |
+|-------|------|----------------|
+| `useWorkspaceStore` | `src/stores/workspace-store.ts` | Source text, target texts, current segment index, **translation direction** (en-ar / ar-en) |
+| `useSettingsStore` | `src/stores/settings-store.ts` | Engine mode (hybrid/local/cloud), cloud-fallback flag, loaded model ID, Gemini API key, **theme** |
+| `useUIStore` | `src/stores/ui-store.ts` | Programmatic panel navigation (`requestNav("models")` etc.) |
+| `useEditorActivityStore` | `src/stores/editor-activity-store.ts` | Editor activity state for the status-bar indicator (typing / suggesting / loading-model / idle) |
+
+#### Persistence Layer
+
+| Layer | File | Storage | Notes |
+|-------|------|---------|-------|
+| Glossary | `src/lib/dual-storage.ts` (glossary store) | IndexedDB | Chunked import; supports `source_db` tag for reference-DB grouping; `updateGlossary` for inline edit |
+| Segments | `src/lib/dual-storage.ts` (segments store) | IndexedDB | Confirmed translations; `source_lang`/`target_lang` derived from active direction |
+| Translation Memory | `src/lib/dual-storage.ts` (tm_entries store) | IndexedDB | Reserved for future TM reuse |
+| Reference-DB state | `src/lib/dual-storage.ts` (sync_meta store, key `downloaded_reference_dbs`) | IndexedDB | Persists "Use" vs "Download" label across reloads |
+| Settings | `src/stores/settings-store.ts` | localStorage | Engine mode, API key, theme |
+| Onboarding seen | `src/components/WelcomeWindow.tsx` (localStorage key `rdat_welcome_seen`) | localStorage | First-launch gate |
+
+---
+
 ### Supported Local Models
 
 #### Ollama Catalog (Tauri: Primary)
@@ -343,11 +476,12 @@ For architectural details, adapter patterns, and migration notes, see [TAURI-MIG
 
 - **Streaming inference**: Streaming token generation for both Ollama and WebLLM to reduce time-to-first-token below 800 ms.
 - **Context window expansion**: Pass previous/next segment source to the LLM for terminological consistency across segments.
-- **Full AR-to-EN pipeline**: The direction toggle exists in v0.2.0 but the reverse LTE index and bidirectional prompts are a future enhancement.
+- **Comprehensive EN↔AR dictionary**: The current seed corpus is ~85 hand-picked entries. Source a licensed multi-thousand-entry bidirectional dictionary dataset and ship it as a lazy-loaded JSON asset so Tier 0 (LTE) suggestions become genuinely comprehensive in both directions.
 - **CI matrix for cross-platform builds**: GitHub Actions for Windows, macOS, and Linux installer production.
 - **Updater signing**: Generate a Tauri updater keypair and host signed manifests on GitHub Releases.
 - **Bundle Ollama in installer**: Eliminate the separate Ollama install step by bundling the daemon via `externalBin`.
 - **IndexedDB migration between PWA and Tauri**: Add an explicit in-app export/import shortcut for glossary data.
+- **LTE scale-up**: The current "rebuild the whole in-memory index on every mutation" approach (deferred via `queueMicrotask` since Phase 1) should be load-tested with a multi-thousand-entry corpus; if it janks, move the rebuild into a Web Worker.
 
 ---
 

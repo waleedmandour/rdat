@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
-import { NavItem, EngineMode, GTRStatus, WebGPUInfo, RAGState, LocalAgentState } from "../types";
+import { NavItem } from "../types";
 import { useDualStorage } from "../hooks/useDualStorage";
 import { WelcomeTab } from "./WelcomeTab";
 import { TranslationWorkspace } from "./editors/TranslationWorkspace";
@@ -17,8 +17,6 @@ import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { useSettingsStore } from "../stores/settings-store";
 import { useUIStore } from "../stores/ui-store";
-import { useRAG } from "../hooks/useRAG";
-import { useLocalAgent } from "../hooks/useLocalAgent";
 import { useWebLLM } from "../hooks/useWebLLM";
 import { Sun, Moon, HelpCircle, RefreshCw } from "lucide-react";
 import { cn } from "../lib/utils";
@@ -112,9 +110,7 @@ export function WorkspaceShell() {
   }, [pendingNav, clearPendingNav]);
 
   // Grab custom stores & hooks
-  const { engineMode, geminiApiKey, useGtr } = useSettingsStore();
-  const { ragState } = useRAG();
-  const { localAgentState } = useLocalAgent();
+  const { engineMode } = useSettingsStore();
   const { webgpuInfo } = useWebLLM();
   const storage = useDualStorage();
 
@@ -251,13 +247,7 @@ export function WorkspaceShell() {
       {/* Footer System Status Bar */}
       <StatusBar
         engineMode={engineMode}
-        gtrStatus={storage.glossaryCount > 0 ? "active" : "zero-shot"}
         webgpuInfo={webgpuInfo}
-        geminiAvailable={!!geminiApiKey}
-        ragState={ragState}
-        localAgentState={localAgentState}
-        segmentCount={storage.segmentCount}
-        wordCount={0}
         storageInfo={{
           tmCount: storage.tmCount,
           glossaryCount: storage.glossaryCount,

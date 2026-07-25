@@ -1,6 +1,5 @@
 import React from "react";
 import { useLanguage } from "../context/LanguageContext";
-import { useSettingsStore } from "../stores/settings-store";
 import { Sliders, Trash2 } from "lucide-react";
 import { useDualStorage } from "../hooks/useDualStorage";
 import { useToast } from "../context/ToastContext";
@@ -10,7 +9,6 @@ export function SettingsPanel() {
   const isRTL = locale === "ar";
   const { showToast } = useToast();
 
-  const { engineMode, setEngineMode, useCloudFallback, setUseCloudFallback } = useSettingsStore();
   const { clearGlossary, refreshCounts } = useDualStorage();
 
   return (

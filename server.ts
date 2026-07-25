@@ -2,18 +2,30 @@ import express from "express";
 import path from "path";
 import { GoogleGenAI } from "@google/genai";
 import dotenv from "dotenv";
+import {
+  buildBurstPrompt,
+  buildFullPrompt,
+  buildTutorPrompt,
+  type TranslationDirection,
+} from "./api/_lib/prompts";
 
 dotenv.config();
 
-// Lazy initialize Google GenAI SDK to prevent container startup crashes
-let aiInstance: GoogleGenAI | null = null;
-
+// Lazy initialize Google GenAI SDK to prevent container startup crashes.
+// Note: unlike the Vercel function (which can cache the SDK instance when
+// using the env-var key), the dev server always creates a fresh instance
+// per request so per-user keys work correctly.
 function getAI(userProvidedKey?: string): GoogleGenAI {
   const apiKey = userProvidedKey || process.env.GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("GEMINI_API_KEY is not configured. Please supply a valid key under the AI Studio Settings panel or API Keys view.");
   }
   return new GoogleGenAI({ apiKey });
+}
+
+/** Validate and normalise the direction field from the request body. */
+function normaliseDirection(raw: unknown): TranslationDirection {
+  return raw === "ar-en" || raw === "en-ar" ? raw : "en-ar";
 }
 
 async function startServer() {
@@ -23,8 +35,10 @@ async function startServer() {
   app.use(express.json());
 
   // API Route 1: Candidate Bursts (Predictive typing candidates)
+  // Direction-aware since PHASE 1; this dev-server mirror was
+  // previously hardcoded to EN→AR. See PHASE 3 task 3.1.
   app.post("/api/translate/burst", async (req, res) => {
-    const { sourceText, targetPrefix, geminiApiKey } = req.body;
+    const { sourceText, targetPrefix, geminiApiKey, direction } = req.body;
 
     if (!sourceText) {
       return res.status(400).json({ error: "Missing sourceText parameter." });
@@ -32,16 +46,8 @@ async function startServer() {
 
     try {
       const ai = getAI(geminiApiKey);
-      const systemPrompt = 
-`You are an expert English-to-Arabic translator.
-Your task is to predict up to 3 natural Arabic translation completions that follow logically from the typed prefix "${targetPrefix || ""}" translating this English sentence:
-"${sourceText}"
-
-Reflect high-quality professional terminology.
-You MUST respond with a valid JSON object matching the following structure:
-{"suggestions": ["suggestion1", "suggestion2", "suggestion3"]}
-
-Do NOT wrap the result in markdown quotes or extra text. Output ONLY the raw JSON block.`;
+      const dir = normaliseDirection(direction);
+      const systemPrompt = buildBurstPrompt(sourceText, targetPrefix || "", dir);
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -61,8 +67,10 @@ Do NOT wrap the result in markdown quotes or extra text. Output ONLY the raw JSO
   });
 
   // API Route 2: Full segment translation
+  // Direction-aware since PHASE 1; this dev-server mirror was
+  // previously hardcoded to EN→AR. See PHASE 3 task 3.1.
   app.post("/api/translate/full", async (req, res) => {
-    const { sourceText, targetPrefix, geminiApiKey } = req.body;
+    const { sourceText, targetPrefix, geminiApiKey, direction } = req.body;
 
     if (!sourceText) {
       return res.status(400).json({ error: "Missing sourceText parameter." });
@@ -70,13 +78,8 @@ Do NOT wrap the result in markdown quotes or extra text. Output ONLY the raw JSO
 
     try {
       const ai = getAI(geminiApiKey);
-      const systemPrompt = 
-`Translate the following English sentence to Arabic:
-"${sourceText}"
-
-${targetPrefix ? `The translation MUST start with this pre-written prefix: "${targetPrefix}"` : ""}
-Provide a fluent translation in standard professional Arabic appropriate for technical translation workflows.
-Return ONLY the raw Arabic translation. No quotes, no explanations, no boilerplate.`;
+      const dir = normaliseDirection(direction);
+      const systemPrompt = buildFullPrompt(sourceText, targetPrefix || "", dir);
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -92,8 +95,10 @@ Return ONLY the raw Arabic translation. No quotes, no explanations, no boilerpla
   });
 
   // API Route 3: AI Translation Tutor
+  // Direction-aware since PHASE 3 task 3.1; previously hardcoded to
+  // "English source sentence and an Arabic translation attempt".
   app.post("/api/translate/tutor-explain", async (req, res) => {
-    const { sourceText, targetText, geminiApiKey, locale } = req.body;
+    const { sourceText, targetText, geminiApiKey, locale, direction } = req.body;
 
     if (!sourceText || !targetText) {
       return res.status(400).json({ error: "Missing sourceText or targetText parameter." });
@@ -102,27 +107,8 @@ Return ONLY the raw Arabic translation. No quotes, no explanations, no boilerpla
     try {
       const ai = getAI(geminiApiKey);
       const isRTL = locale === "ar";
-      
-      const systemPrompt = 
-`You are an elite, pedagogical translation professor teaching Arabic-English professional translation.
-Your task is to analyze an English source sentence and an Arabic translation attempt, and provide rich pedagogical feedback and corrections.
-
-English Source: "${sourceText}"
-Arabic Translation Attempt: "${targetText}"
-
-Respond with a strictly formatted JSON object matching this structure:
-{
-  "rating": 90, // integer from 0 to 100
-  "grade": "A", // letter grade (e.g., A+, B-, C)
-  "explanation": "A direct feedback paragraph explaining style and grammatical cohesion in the language designated by isRTL=${isRTL}. Speak affectionately as a helpful coaching tutor.",
-  "termsAnalysed": [
-    { "term": "English Term", "analysis": "Arabic mapping explanation and contextual fit analysis." }
-  ],
-  "pitfalls": "Common translation traps, literal translation failures, or false friends to watch out for in this sentence."
-}
-
-Ensure your entire explanation, analyses, and comments are returned in ${isRTL ? "Arabic" : "English"}.
-Do NOT wrap the response in markdown quotes or code fences. Output ONLY the raw JSON block.`;
+      const dir = normaliseDirection(direction);
+      const systemPrompt = buildTutorPrompt(sourceText, targetText, isRTL, dir);
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",
@@ -152,7 +138,7 @@ Do NOT wrap the response in markdown quotes or code fences. Output ONLY the raw 
   } else {
     const distPath = path.join(process.cwd(), "dist");
     app.use(express.static(distPath));
-    app.get("*", (req, res) => {
+    app.get("*", (_req, res) => {
       res.sendFile(path.join(distPath, "index.html"));
     });
   }

@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { useLanguage } from "../context/LanguageContext";
-import { useSettingsStore } from "../stores/settings-store";
 import { RdatLogo } from "./RdatLogo";
 import { ChevronLeft, ChevronRight, Check, Server, Download, Play } from "lucide-react";
 

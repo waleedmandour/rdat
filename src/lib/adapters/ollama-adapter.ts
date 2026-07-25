@@ -43,7 +43,6 @@ import type {
   StateChangeCallback,
 } from "../llm-adapter";
 import { buildRAGSystemPrompt, buildUserPrompt } from "../llm-adapter";
-import type { CorpusEntry } from "../local-translation-engine";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 
 // ─── Tauri Detection ──────────────────────────────────────────────

@@ -167,7 +167,6 @@ export function OllamaOnboardingModal({
               title={isRTL ? "تحميل Ollama" : "Download Ollama"}
               isActive={step === 1}
               isDone={step > 1}
-              onDone={() => setStep(2)}
             >
               <p className="text-[11px] text-muted-foreground mb-3">
                 {isRTL
@@ -194,7 +193,6 @@ export function OllamaOnboardingModal({
               title={isRTL ? "تشغيل الخادم" : "Start the daemon"}
               isActive={step === 2}
               isDone={step > 2}
-              onDone={() => setStep(3)}
             >
               <div className="text-[11px] text-muted-foreground space-y-2">
                 {platform === "windows" && (
@@ -310,14 +308,12 @@ function OnboardingStep({
   title,
   isActive,
   isDone,
-  onDone,
   children,
 }: {
   number: number;
   title: string;
   isActive: boolean;
   isDone: boolean;
-  onDone?: () => void;
   children: React.ReactNode;
 }) {
   return (

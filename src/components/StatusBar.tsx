@@ -13,10 +13,7 @@ import {
 } from "lucide-react";
 import {
   EngineMode,
-  GTRStatus,
   WebGPUInfo,
-  RAGState,
-  LocalAgentState
 } from "../types";
 import { cn } from "../lib/utils";
 import { isTauriEnvironment } from "../lib/adapters/ollama-adapter";
@@ -25,13 +22,7 @@ import { useEditorActivityStore } from "../stores/editor-activity-store";
 
 interface StatusBarProps {
   engineMode: EngineMode;
-  gtrStatus: GTRStatus;
   webgpuInfo: WebGPUInfo;
-  geminiAvailable: boolean;
-  ragState: RAGState;
-  localAgentState: LocalAgentState;
-  segmentCount: number;
-  wordCount: number;
   storageInfo: {
     tmCount: number;
     glossaryCount: number;
@@ -44,13 +35,7 @@ interface StatusBarProps {
 
 export function StatusBar({
   engineMode,
-  gtrStatus,
   webgpuInfo,
-  geminiAvailable,
-  ragState,
-  localAgentState,
-  segmentCount,
-  wordCount,
   storageInfo,
 }: StatusBarProps) {
   const { t, locale } = useLanguage();
