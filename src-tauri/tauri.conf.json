@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "RDAT Copilot",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "identifier": "com.waleedmandour.rdat",
   "build": {
     "beforeDevCommand": "npm run dev",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "RDAT: Translation Copilot - English-Arabic CAT Assistant",
+        "title": "RDAT: Translation Copilot - Bidirectional EN↔AR CAT Assistant",
         "width": 1400,
         "height": 900,
         "minWidth": 1024,
@@ -40,8 +40,8 @@
     "externalBin": [],
     "copyright": "Copyright (c) 2026 Dr. Waleed Mandour",
     "category": "Productivity",
-    "shortDescription": "Professional English-Arabic CAT environment",
-    "longDescription": "AI-powered, desktop translation workspace for professional English-to-Arabic translation workflows. Combines a segmented translation editor with a three-tier predictive ghost-text pipeline powered by local Ollama LLMs.",
+    "shortDescription": "Professional bidirectional EN↔AR CAT environment",
+    "longDescription": "AI-powered, desktop translation workspace for professional bidirectional English↔Arabic translation workflows. Combines a segmented translation editor with a three-tier predictive ghost-text pipeline powered by local Ollama LLMs, with full AR→EN and EN→AR support.",
     "macOS": {
       "frameworks": [],
       "minimumSystemVersion": "10.15"

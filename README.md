@@ -1,20 +1,21 @@
 # RDAT: Translation Copilot
 
-**Professional English-to-Arabic Computer-Assisted Translation (CAT) Environment**
+**Professional Bidirectional English↔Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Version](https://img.shields.io/badge/Version-0.2.0-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.2.0)
+[![Version](https://img.shields.io/badge/Version-0.3.0-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.3.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
 [![PWA Ready](https://img.shields.io/badge/PWA-Optional-6366f1?logo=pwa&logoColor=white)](https://github.com/waleedmandour/rdat)
+[![CI](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml/badge.svg)](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml)
 
 ---
 
 ## Overview
 
-RDAT: Translation Copilot is an AI-powered translation workspace purpose-built for professional English-to-Arabic translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline, from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback, delivering real-time suggestions while keeping translators in full control of every word.
+RDAT: Translation Copilot is an AI-powered translation workspace purpose-built for professional **bidirectional English↔Arabic** translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline, from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback, delivering real-time suggestions while keeping translators in full control of every word. As of v0.3.0, both EN→AR and AR→EN directions are fully supported end-to-end across all three tiers.
 
-As of v0.2.0, RDAT ships in **two complementary forms**, sharing a single React/Vite frontend:
+As of v0.3.0, RDAT ships in **two complementary forms**, sharing a single React/Vite frontend:
 
 | Distribution | Best for | Install size | Local LLM |
 |---|---|---|---|
@@ -22,6 +23,52 @@ As of v0.2.0, RDAT ships in **two complementary forms**, sharing a single React/
 | **PWA on Vercel** (browser) | Try-before-install; mobile; locked-down machines | Zero install (browser) | WebLLM via WebGPU (optional) |
 
 The system's primary engine is the **local LLM** (Ollama in desktop mode, WebLLM in browser mode). Gemini 2.5 Flash is a **secondary fallback** for when local tiers yield low confidence, complex passages, or when no local model is available. This local-first architecture ensures data privacy and offline capability: the Local Translation Engine (LTE) and on-device LLM models operate without any network egress, while glossary databases, translation memories, and segment history persist across sessions through IndexedDB.
+
+---
+
+## What's New in v0.3.0
+
+v0.3.0 is a major release that completes the bidirectional translation pipeline, polishes the dark/light theme, and adds GitHub Actions CI/CD with cross-platform Tauri builds.
+
+### Bidirectional Translation (Phase 1)
+
+AR→EN translation now works end-to-end across all three tiers — previously it only worked on the Tauri+Ollama path; every other tier silently hardcoded an EN→AR assumption.
+
+- **Tier 0 (LTE)**: bidirectional `enIndex` + `arIndex` built in `load()`; `getSuggestion()` / `search()` take a `direction` parameter. Arabic sentence-splitting now recognises the Arabic question mark `؟` (U+061F) and Arabic-letter lookahead.
+- **Tier 1 (Local LLM)**: `generateLocalTranslation()` / `generateRAGTranslation()` / `prefetchTranslation()` accept a `direction` parameter and call the shared `buildRAGSystemPrompt()` / `buildUserPrompt()` from `llm-adapter.ts`. The duplicated hardcoded prompts that caused the original bug are deleted.
+- **Tier 2 (Gemini)**: `GeminiBurstRequest` / `GeminiFullRequest` / `GeminiTutorRequest` accept an optional `direction` field. New shared `api/_lib/prompts.ts` keeps PWA and Tauri prompt builders in sync.
+- **AI Translation Tutor**: prompt now labels the source/target correctly for AR→EN attempts ("Arabic Source" / "English Translation Attempt") instead of always saying "English Source" / "Arabic Translation Attempt".
+- **Segment persistence**: `source_lang` / `target_lang` derived from active direction on save.
+- **Editor UI**: Source panel header, language tag, placeholder, and textarea direction all flip with direction. Target panel's speech-synthesis locale switches to `en-US` in AR→EN mode.
+
+### Glossary UX (Phase 2)
+
+- **"Download" → "Use" with persistence**: downloaded reference DBs are tracked in IndexedDB `sync_meta`, so the button label survives page reloads. "Use" is a toggle — clicking it removes that DB's entries.
+- **Inline editing**: every glossary entry, regardless of source (manual, JSON upload, or reference DB), can be edited in place via a Pencil icon next to the existing Trash2. Edits trigger an LTE rebuild so ghost-text reflects the change immediately.
+- **Dark-mode fixes**: 15 hardcoded `bg-[#0A0B0E]` / `dark:bg-[#0F1116]` patterns replaced with `bg-background` / `bg-surface` tokens across TranslationWorkspace, SourceEditor, TargetEditor, WelcomeTab, GlossaryView, QuickGuideModal. Toasts converted from always-dark to theme-aware `bg-surface` / `text-foreground`.
+
+### Regression Sweep + Lint Hardening (Phase 3)
+
+- **AI Tutor prompt**: direction-aware (see above).
+- **Data model**: manual Add-Term and JSON-upload paths now derive `source_lang` / `target_lang` from active direction (with JSON honouring explicit per-row fields if present).
+- **TypeScript strictness**: `noUnusedLocals` + `noUnusedParameters` now enabled in `tsconfig.json` so the existing `npm run lint` catches dead imports going forward. The Phase 1 dead-import root cause was "no lint rule was on at all" — that gap is now closed. All 30 pre-existing unused-var errors cleaned up.
+- **README**: comprehensive Project Structure section added; stale "AR→EN pipeline future enhancement" line removed from Roadmap.
+
+### CI/CD (new in v0.3.0)
+
+- **`.github/workflows/ci.yml`**: runs on every push/PR — TypeScript strict lint, Phase 1 LTE smoke test (12/12), Phase 3 regression sweep (30/30), Vite production build.
+- **`.github/workflows/release.yml`**: triggered by pushing a `v*` tag — builds Tauri installers in parallel for Windows (.exe NSIS), macOS Apple Silicon (.dmg), macOS Intel (.dmg), and Linux (.deb / .rpm / .AppImage). All four platform installers attach to the GitHub release automatically.
+
+### Smoke Tests
+
+Two offline smoke-test scripts ship in `scripts/`:
+
+```
+npx tsx scripts/test-bidirectional-lte.ts   # Phase 1 — 12 tests
+npx tsx scripts/test-phase3-regression.ts   # Phase 3 — 30 tests
+```
+
+Both pass clean. Run them after any change to the LTE, prompt builders, or direction wiring.
 
 ---
 
@@ -380,13 +427,13 @@ On first launch, if Ollama is not running, the onboarding modal will guide you t
 **Windows (use NSIS to avoid WiX path issues):**
 ```powershell
 npm run tauri:build -- --bundles nsis
-# Output: src-tauri\target\release\bundle\nsis\RDAT Copilot_0.2.0_x64-setup.exe
+# Output: src-tauri\target\release\bundle\nsis\RDAT Copilot_0.3.0_x64-setup.exe
 ```
 
 **macOS:**
 ```bash
 npm run tauri:build
-# Output: src-tauri/target/release/bundle/dmg/RDAT Copilot_0.2.0_aarch64.dmg
+# Output: src-tauri/target/release/bundle/dmg/RDAT Copilot_0.3.0_aarch64.dmg
 ```
 
 **Linux:**
@@ -489,7 +536,7 @@ For architectural details, adapter patterns, and migration notes, see [TAURI-MIG
 
 If you use RDAT: Translation Copilot in academic work, please cite:
 
-> Mandour, W. (2026). *RDAT: Translation Copilot (Version 0.2.0)* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21256765
+> Mandour, W. (2026). *RDAT: Translation Copilot (Version 0.3.0)* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21256765
 
 ---
 

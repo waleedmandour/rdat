@@ -1,7 +1,7 @@
 [package]
 name = "rdat"
-version = "0.2.0"
-description = "RDAT Copilot — Professional English-to-Arabic CAT Environment"
+version = "0.3.0"
+description = "RDAT Copilot — Professional bidirectional EN↔AR CAT Environment"
 authors = ["Dr. Waleed Mandour <w.abumandour@squ.edu.om>"]
 license = "MIT"
 repository = "https://github.com/waleedmandour/rdat"

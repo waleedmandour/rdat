@@ -1,0 +1,50 @@
+# Continuous integration — runs on every push and pull request.
+# Fast feedback loop: typecheck, smoke tests, Vite production build.
+# The heavy Tauri cross-platform builds live in release.yml (tag-triggered).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-and-test:
+    name: Lint + smoke tests + Vite build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck (strict — noUnusedLocals/Parameters)
+        run: npm run lint
+
+      - name: Run bidirectional LTE smoke test (Phase 1)
+        run: npx tsx scripts/test-bidirectional-lte.ts
+
+      - name: Run Phase 3 regression sweep
+        run: npx tsx scripts/test-phase3-regression.ts
+
+      - name: Vite production build
+        run: npm run build
+
+      - name: Upload Vite build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vite-dist
+          path: dist/
+          retention-days: 7

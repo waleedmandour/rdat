@@ -1,0 +1,157 @@
+# Release build — triggered by pushing a v* tag (e.g. v0.3.0).
+#
+# Builds native Tauri installers for Windows, macOS (Intel + Apple
+# Silicon), and Linux in parallel on GitHub-hosted runners, then
+# attaches every installer to the GitHub release that the tag points
+# to. The release itself must already exist (created via the GitHub
+# UI, API, or `gh release create`) — this workflow only uploads
+# artifacts to it.
+#
+# To cut a new release:
+#   1. Bump version in package.json, src-tauri/Cargo.toml,
+#      src-tauri/tauri.conf.json (keep all three in sync).
+#   2. Commit and push to main.
+#   3. git tag v0.X.0 && git push origin v0.X.0
+#   4. Create the release on GitHub (or via the API) so this workflow
+#      has a target to upload to.
+#   5. This workflow runs; installers land on the release page.
+#
+# The first run on each platform takes 15-30 minutes because Rust
+# compiles every dependency from scratch. Subsequent runs reuse the
+# cargo cache and finish in 5-10 minutes.
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write  # needed by softprops/action-gh-release to upload assets
+
+jobs:
+  # ─────────────────────────────────────────────────────────────────
+  # Pre-flight: run the same CI gate (lint + smoke tests + Vite build)
+  # so a tag never produces installers from a broken commit.
+  # ─────────────────────────────────────────────────────────────────
+  pre-flight:
+    name: Pre-flight (lint + tests + Vite build)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+      - run: npm ci
+      - run: npm run lint
+      - run: npx tsx scripts/test-bidirectional-lte.ts
+      - run: npx tsx scripts/test-phase3-regression.ts
+      - run: npm run build
+
+  # ─────────────────────────────────────────────────────────────────
+  # Tauri builds — one matrix job per platform. Each job produces
+  # the native installers for its OS and uploads them to the release.
+  # ─────────────────────────────────────────────────────────────────
+  build-tauri:
+    name: Build Tauri (${{ matrix.settings.platform }})
+    needs: pre-flight
+    strategy:
+      fail-fast: false  # build all three platforms even if one fails
+      matrix:
+        settings:
+          # ── Windows (x64) — produces .exe NSIS installer + .msi ──
+          - platform: "windows-x64"
+            os: windows-latest
+            args: "--bundles nsis"
+            rust-target: "x86_64-pc-windows-msvc"
+          # ── macOS (Apple Silicon) — produces .dmg ──
+          - platform: "macos-aarch64"
+            os: macos-latest
+            args: "--target aarch64-apple-darwin"
+            rust-target: "aarch64-apple-darwin"
+          # ── macOS (Intel) — produces .dmg ──
+          # Run as a separate matrix entry so both .dmg files land on
+          # the release. Comment out if Intel Macs are no longer
+          # supported.
+          - platform: "macos-x86_64"
+            os: macos-13
+            args: "--target x86_64-apple-darwin"
+            rust-target: "x86_64-apple-darwin"
+          # ── Linux (x64) — produces .deb, .rpm, .AppImage ──
+          - platform: "linux-x64"
+            os: ubuntu-22.04
+            args: ""
+            rust-target: "x86_64-unknown-linux-gnu"
+
+    runs-on: ${{ matrix.settings.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: "npm"
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.settings.rust-target }}
+
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: "src-tauri -> target"
+
+      # ── Linux: install Tauri system deps ──
+      # Per https://v2.tauri.app/start/prerequisites/
+      - name: Install Linux system dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libxdo-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            build-essential \
+            curl \
+            wget \
+            file \
+            libxdo-dev \
+            libssl-dev
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      # ── Build the Tauri bundle for this platform ──
+      # `--bundles nsis` on Windows skips the WiX/MSI bundler which
+      # fails on usernames with spaces (see README). On macOS the
+      # --target flag produces a separate .dmg per architecture.
+      - name: Build Tauri
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: "RDAT: Translation Copilot ${{ github.ref_name }}"
+          releaseDraft: false
+          prerelease: false
+          args: ${{ matrix.settings.args }}
+
+      # ── Upload a separate artifact per platform so failed platforms
+      # can be re-run without rebuilding the others. The
+      # tauri-action also attaches to the release directly; this
+      # workflow upload is a redundant safety net.
+      - name: Upload build artifacts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tauri-bundle-${{ matrix.settings.platform }}
+          path: |
+            src-tauri/target/release/bundle/
+            src-tauri/target/*/release/bundle/
+          retention-days: 30
+          if-no-files-found: warn
