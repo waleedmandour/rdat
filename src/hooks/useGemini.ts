@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useSettingsStore } from "../stores/settings-store";
-import { TutorAnalysis } from "../types";
+import type { TutorAnalysis } from "../types";
+import type { TranslationDirection } from "../stores/workspace-store";
 import {
   geminiBurst,
   geminiFull,
@@ -20,6 +21,12 @@ import {
  *
  * The dispatch happens in src/lib/gemini-direct.ts. This hook just
  * calls those functions and manages loading/error state.
+ *
+ * Direction-aware (PHASE 1): `generateBurst` and `generateFullTranslation`
+ * accept a `direction` argument which they forward into the request
+ * body. The Vercel functions and the Tauri Rust proxy both branch on
+ * this to build direction-appropriate prompts. Callers should source
+ * the direction from `useWorkspaceStore.getState().direction`.
  *
  * Retry logic: Gemini calls are retried up to 2 times with exponential
  * backoff (500ms, 1500ms) on 5xx errors and network failures.
@@ -54,7 +61,11 @@ export function useGemini() {
   };
 
   const generateBurst = useCallback(
-    async (sourceText: string, targetPrefix: string): Promise<string[]> => {
+    async (
+      sourceText: string,
+      targetPrefix: string,
+      direction: TranslationDirection = "en-ar"
+    ): Promise<string[]> => {
       if (!sourceText.trim()) return [];
 
       setLoading(true);
@@ -64,6 +75,7 @@ export function useGemini() {
           sourceText,
           targetPrefix,
           geminiApiKey,
+          direction,
         }));
         return result.suggestions || [];
       } catch (err: any) {
@@ -78,7 +90,11 @@ export function useGemini() {
   );
 
   const generateFullTranslation = useCallback(
-    async (sourceText: string, targetPrefix: string): Promise<string> => {
+    async (
+      sourceText: string,
+      targetPrefix: string,
+      direction: TranslationDirection = "en-ar"
+    ): Promise<string> => {
       if (!sourceText.trim()) return "";
 
       setLoading(true);
@@ -88,6 +104,7 @@ export function useGemini() {
           sourceText,
           targetPrefix,
           geminiApiKey,
+          direction,
         }));
         return result.translation || "";
       } catch (err: any) {

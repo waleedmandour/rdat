@@ -207,7 +207,7 @@ export function TargetEditor({
 
     // Step 0a: LTE instant exact/partial match (<5ms, always check)
     if (hasCorpus) {
-      const localMatch = lte.getSuggestion(sourceText, typedText);
+      const localMatch = lte.getSuggestion(sourceText, typedText, direction);
       if (localMatch && localMatch.remainder) {
         setGhostSuggestion(localMatch.remainder);
         setSuggestionCandidates([localMatch.match]);
@@ -269,7 +269,7 @@ export function TargetEditor({
           try {
             // Retrieve RAG entries from LTE for the adapter
             const ragEntries: CorpusEntry[] | undefined = hasCorpus
-              ? getLTE().search(sourceText, 5)
+              ? getLTE().search(sourceText, 5, direction)
               : undefined;
 
             const llmCandidates = await adapter.translate({
@@ -318,8 +318,8 @@ export function TargetEditor({
         const fetchId = ++latestFetchId.current;
         try {
           const llmCandidates = hasCorpus
-            ? await generateRAGTranslation(sourceText, typedText, 5)
-            : await generateLocalTranslation(sourceText, typedText);
+            ? await generateRAGTranslation(sourceText, typedText, 5, direction)
+            : await generateLocalTranslation(sourceText, typedText, direction);
           if (fetchId !== latestFetchId.current) return;
 
           if (llmCandidates.length > 0) {
@@ -371,7 +371,7 @@ export function TargetEditor({
     if (useCloudFallbackRef.current && engineModeRef.current !== "local") {
       const fetchId = ++latestFetchId.current;
       try {
-        const candidates = await generateBurst(sourceText, typedText);
+        const candidates = await generateBurst(sourceText, typedText, direction);
         if (fetchId !== latestFetchId.current) return;
         if (candidates && candidates.length > 0) {
           const best = candidates[0];
@@ -408,7 +408,7 @@ export function TargetEditor({
 
     // Reset activity to idle after fetch completes
     setEditorActivity("idle");
-  }, [sourceText, generateBurst]);
+  }, [sourceText, generateBurst, direction]);
 
   // ─── Prefetch on segment focus + typing debounce + idle-pause re-engagement ───
   // Three trigger mechanisms:
@@ -444,7 +444,7 @@ export function TargetEditor({
         justAcceptedRef.current = false;
         return;
       }
-      prefetchTranslation(sourceText).catch(() => {});
+      prefetchTranslation(sourceText, direction).catch(() => {});
 
       // Also trigger a background Ollama call for the full translation
       // so when the user starts typing, the result is already cached.
@@ -456,7 +456,7 @@ export function TargetEditor({
           adapter.translate({
             sourceText,
             targetPrefix: "",
-            ragEntries: getLTE().getStats().entries > 0 ? getLTE().search(sourceText, 5) : undefined,
+            ragEntries: getLTE().getStats().entries > 0 ? getLTE().search(sourceText, 5, direction) : undefined,
           }).then((candidates) => {
             if (candidates.length > 0 && candidates[0].trim()) {
               // Cache the result so the first keystroke gets instant ghost text
@@ -576,7 +576,12 @@ export function TargetEditor({
   const handlePronunciation = () => {
     if (!translationText) return;
     const utterance = new SpeechSynthesisUtterance(translationText);
-    utterance.lang = "ar-SA";
+    // Target is Arabic for "en-ar" and English for "ar-en". Pick the
+    // matching speech-synthesis locale so the browser uses the right
+    // voice. Previously this was hardcoded to "ar-SA" which made the
+    // browser try to speak English text with an Arabic voice in AR→EN
+    // mode. See PHASE 1 task 1.5.
+    utterance.lang = direction === "ar-en" ? "en-US" : "ar-SA";
     window.speechSynthesis.speak(utterance);
   };
 
@@ -617,7 +622,7 @@ export function TargetEditor({
               <Volume2 className="w-3.5 h-3.5" />
             </button>
           )}
-          <span className="font-bold text-primary text-[10px] tracking-widest">AR-SA</span>
+          <span className="font-bold text-primary text-[10px] tracking-widest">{isTargetRTL ? "AR-SA" : "EN-US"}</span>
         </div>
       </div>
 

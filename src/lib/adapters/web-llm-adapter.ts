@@ -23,8 +23,9 @@ import type {
   TranslateOptions,
   StateChangeCallback,
 } from "../llm-adapter";
-import { buildRAGSystemPrompt, buildUserPrompt } from "../llm-adapter";
 import { MODEL_MAP } from "../local-llm-engine";
+import { useWorkspaceStore } from "../../stores/workspace-store";
+import type { TranslationDirection } from "../../stores/workspace-store";
 
 // Lazy-import the engine to avoid pulling WebLLM into the Tauri-only
 // bundle path. The dynamic import also lets us gracefully handle the
@@ -130,13 +131,20 @@ export class WebLLMAdapter implements LLMAdapter {
     const engine = await getEngine();
     const { sourceText, targetPrefix = "", ragEntries } = opts;
 
+    // Read the current translation direction from the workspace store.
+    // This mirrors what the OllamaAdapter does and ensures WebLLM-based
+    // inference produces direction-aware prompts (previously the
+    // WebLLM path hardcoded English→Arabic — see PHASE 1 task 1.2).
+    const direction: TranslationDirection =
+      useWorkspaceStore.getState().direction || "en-ar";
+
     // Delegate to the engine's RAG or non-RAG path based on whether
     // RAG entries were provided. This preserves the existing
     // prefetch-cache behavior that TargetEditor relies on.
     if (ragEntries && ragEntries.length > 0) {
-      return engine.generateRAGTranslation(sourceText, targetPrefix, 5);
+      return engine.generateRAGTranslation(sourceText, targetPrefix, 5, direction);
     }
-    return engine.generateLocalTranslation(sourceText, targetPrefix);
+    return engine.generateLocalTranslation(sourceText, targetPrefix, direction);
   }
 
   // ── Model Catalog ──

@@ -24,7 +24,13 @@ export function SourceEditor({
   const isRTL = locale === "ar";
   const { showToast } = useToast();
 
-  const { setSourceText, setTargetTexts } = useWorkspaceStore();
+  const { setSourceText, setTargetTexts, direction } = useWorkspaceStore();
+  // When direction is "ar-en" the source panel is showing Arabic input.
+  // When "en-ar" (default) it's showing English input. This drives the
+  // header label, the language tag, the import placeholder, and the
+  // textarea text direction (RTL for Arabic, LTR for English).
+  // See PHASE 1 task 1.5.
+  const isSourceArabic = direction === "ar-en";
 
   // Importer state
   const [isImportOpen, setIsImportOpen] = useState(false);
@@ -38,9 +44,12 @@ export function SourceEditor({
       return;
     }
 
-    // Split text into paragraphs/sentences
+    // Split text into paragraphs/sentences. The terminator set covers
+    // Latin . ! ? AND Arabic ؟ (U+061F) so Arabic source text is split
+    // correctly when direction is "ar-en". Newlines always split too.
+    // See PHASE 1 task 1.5.
     const parsed = importText
-      .split(/(?<=[.!?])\s+|\n+/)
+      .split(/(?<=[.!?\u061F])\s+|\n+/u)
       .map((s) => s.trim())
       .filter((s) => s.length > 0);
 
@@ -149,7 +158,9 @@ export function SourceEditor({
       {/* Editor Panel Header */}
       <div className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4">
         <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
-          {isRTL ? "مستند المصدر — إنكليزي" : "Source Text — English"}
+          {isSourceArabic
+            ? (isRTL ? "مستند المصدر — عربي" : "Source Text — Arabic")
+            : (isRTL ? "مستند المصدر — إنكليزي" : "Source Text — English")}
         </span>
         <div className="flex items-center gap-2">
           <button
@@ -164,7 +175,7 @@ export function SourceEditor({
             {isImportOpen ? <X className="w-3 h-3" /> : <Upload className="w-3 h-3" />}
             <span>{isImportOpen ? (isRTL ? "إلغاء لسطح المكتب" : "Cancel") : (isRTL ? "استيراد ملف" : "Import Document")}</span>
           </button>
-          <span className="font-mono text-[10px] text-slate-500">EN-US</span>
+          <span className="font-mono text-[10px] text-slate-500">{isSourceArabic ? "AR-SA" : "EN-US"}</span>
         </div>
       </div>
 
@@ -206,7 +217,10 @@ export function SourceEditor({
           <textarea
             value={importText}
             onChange={(e) => setImportText(e.target.value)}
-            placeholder={isRTL ? "أو قم بلصق نص المصدر المباشر هنا..." : "Or paste English source document content directly here..."}
+            dir={isSourceArabic ? "rtl" : "ltr"}
+            placeholder={isSourceArabic
+              ? (isRTL ? "أو قم بلصق محتوى المستند العربي هنا..." : "Or paste Arabic source document content directly here...")
+              : (isRTL ? "أو قم بلصق نص المصدر المباشر هنا..." : "Or paste English source document content directly here...")}
             className="w-full text-xs font-sans p-3 bg-background dark:bg-[#0A0B0E] border border-border/80 rounded-lg h-24 focus:outline-none focus:border-primary/50 resize-none"
           />
 

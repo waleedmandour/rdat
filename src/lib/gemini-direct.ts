@@ -12,9 +12,16 @@
  * The interface matches `useGemini.ts` so the existing hook can use
  * this without modification — it just needs to call these functions
  * instead of `fetch("/api/translate/...")` directly.
+ *
+ * PHASE 1 (bidirectional translation): the burst/full request types
+ * and prompt builders now accept a `direction: "en-ar" | "ar-en"`
+ * field. Both the Tauri and PWA code paths share the same
+ * direction-aware prompt builders so behaviour stays identical
+ * across the two deployment targets.
  */
 
 import { isTauriEnvironment } from "./adapters/ollama-adapter";
+import type { TranslationDirection } from "../stores/workspace-store";
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -22,12 +29,16 @@ export interface GeminiBurstRequest {
   sourceText: string;
   targetPrefix: string;
   geminiApiKey: string;
+  /** Translation direction. Defaults to "en-ar" for backward compat with older callers. */
+  direction?: TranslationDirection;
 }
 
 export interface GeminiFullRequest {
   sourceText: string;
   targetPrefix: string;
   geminiApiKey: string;
+  /** Translation direction. Defaults to "en-ar" for backward compat with older callers. */
+  direction?: TranslationDirection;
 }
 
 export interface GeminiTutorRequest {
@@ -64,13 +75,54 @@ async function getInvoke() {
   return invokeFn;
 }
 
+// ─── Direction-aware prompt labels ────────────────────────────────
+// These mirror the phrasing already used by buildRAGSystemPrompt() /
+// buildUserPrompt() in src/lib/llm-adapter.ts so that Tier 2 (Gemini)
+// and Tier 1 (local LLM) speak the same direction-aware language to
+// the model. Keeping one vocabulary avoids the drift that previously
+// left Gemini hardcoded to "English-to-Arabic" while the local LLM
+// was already direction-aware.
+
+interface DirectionLabels {
+  sourceLang: string;   // "English" | "Arabic"
+  targetLang: string;   // "Arabic" | "English"
+  sourceLabel: string;  // "English source" | "Arabic source"
+  targetLabel: string;  // "Arabic translation" | "English translation"
+  professionalTarget: string; // "standard professional Arabic" | "professional English"
+}
+
+function labelsForDirection(direction: TranslationDirection): DirectionLabels {
+  return direction === "ar-en"
+    ? {
+        sourceLang: "Arabic",
+        targetLang: "English",
+        sourceLabel: "Arabic source",
+        targetLabel: "English translation",
+        professionalTarget: "professional English suitable for academic contexts",
+      }
+    : {
+        sourceLang: "English",
+        targetLang: "Arabic",
+        sourceLabel: "English source",
+        targetLabel: "Arabic translation",
+        professionalTarget: "standard professional Arabic appropriate for technical translation workflows",
+      };
+}
+
 // ─── Shared prompt builders ───────────────────────────────────────
 // These mirror the prompts in api/translate/*.ts so behavior is
-// identical between PWA and Tauri modes.
+// identical between PWA and Tauri modes. The api/translate/*.ts
+// functions export their own copies of these builders (see PHASE 1
+// task 1.3) — keep them in sync if you change phrasing here.
 
-function buildBurstPrompt(sourceText: string, targetPrefix: string): string {
-  return `You are an expert English-to-Arabic translator.
-Your task is to predict up to 3 natural Arabic translation completions that follow logically from the typed prefix "${targetPrefix || ""}" translating this English sentence:
+function buildBurstPrompt(
+  sourceText: string,
+  targetPrefix: string,
+  direction: TranslationDirection = "en-ar"
+): string {
+  const labels = labelsForDirection(direction);
+  return `You are an expert ${labels.sourceLang}-to-${labels.targetLang} translator.
+Your task is to predict up to 3 natural ${labels.targetLang} translation completions that follow logically from the typed prefix "${targetPrefix || ""}" translating this ${labels.sourceLang} sentence:
 "${sourceText}"
 
 Reflect high-quality professional terminology.
@@ -80,13 +132,18 @@ You MUST respond with a valid JSON object matching the following structure:
 Do NOT wrap the result in markdown quotes or extra text. Output ONLY the raw JSON block.`;
 }
 
-function buildFullPrompt(sourceText: string, targetPrefix: string): string {
-  return `Translate the following English sentence to Arabic:
+function buildFullPrompt(
+  sourceText: string,
+  targetPrefix: string,
+  direction: TranslationDirection = "en-ar"
+): string {
+  const labels = labelsForDirection(direction);
+  return `Translate the following ${labels.sourceLang} sentence to ${labels.targetLang}:
 "${sourceText}"
 
 ${targetPrefix ? `The translation MUST start with this pre-written prefix: "${targetPrefix}"` : ""}
-Provide a fluent translation in standard professional Arabic appropriate for technical translation workflows.
-Return ONLY the raw Arabic translation. No quotes, no explanations, no boilerplate.`;
+Provide a fluent translation in ${labels.professionalTarget}.
+Return ONLY the raw ${labels.targetLang} translation. No quotes, no explanations, no boilerplate.`;
 }
 
 function buildTutorPrompt(sourceText: string, targetText: string, isRTL: boolean): string {
@@ -115,7 +172,8 @@ Do NOT wrap the response in markdown quotes or code fences. Output ONLY the raw 
 
 async function tauriGeminiBurst(req: GeminiBurstRequest): Promise<GeminiBurstResponse> {
   const invoke = await getInvoke();
-  const systemPrompt = buildBurstPrompt(req.sourceText, req.targetPrefix);
+  const direction = req.direction || "en-ar";
+  const systemPrompt = buildBurstPrompt(req.sourceText, req.targetPrefix, direction);
   const result = await invoke("gemini_translate", {
     req: {
       model: "gemini-2.5-flash",
@@ -142,7 +200,8 @@ async function tauriGeminiBurst(req: GeminiBurstRequest): Promise<GeminiBurstRes
 
 async function tauriGeminiFull(req: GeminiFullRequest): Promise<GeminiFullResponse> {
   const invoke = await getInvoke();
-  const systemPrompt = buildFullPrompt(req.sourceText, req.targetPrefix);
+  const direction = req.direction || "en-ar";
+  const systemPrompt = buildFullPrompt(req.sourceText, req.targetPrefix, direction);
   const result = await invoke("gemini_translate", {
     req: {
       model: "gemini-2.5-flash",

@@ -242,11 +242,18 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     }
 
     try {
+      // Derive source/target language from the active translation
+      // direction so AR→EN sessions persist with source_lang="ar",
+      // target_lang="en". Previously this was hardcoded to "en"→"ar"
+      // which corrupted AR→EN segments. See PHASE 1 task 1.4.
+      const sourceLang = isArToEn ? "ar" : "en";
+      const targetLang = isArToEn ? "en" : "ar";
+
       const newEntry: Omit<SegmentEntry, "id"> = {
         source: sentences[idx],
         target: text,
-        source_lang: "en",
-        target_lang: "ar",
+        source_lang: sourceLang,
+        target_lang: targetLang,
         status: "confirmed",
         score: 1.0,
         segment_index: idx

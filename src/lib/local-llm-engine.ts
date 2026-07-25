@@ -23,6 +23,11 @@ import {
   deleteModelInCache,
 } from "@mlc-ai/web-llm";
 import { getLTE, type CorpusEntry } from "./local-translation-engine";
+import {
+  buildRAGSystemPrompt,
+  buildUserPrompt,
+} from "./llm-adapter";
+import type { TranslationDirection } from "../stores/workspace-store";
 
 // ─── Model ID Mapping ─────────────────────────────────────────────
 // Maps the RDAT catalog IDs to the actual MLC WebLLM model registry IDs.
@@ -130,48 +135,15 @@ export function onEngineStateChange(cb: StateChangeCallback): () => void {
   return () => subscribers.delete(cb);
 }
 
-// ─── Structured System Prompt Builder ──────────────────────────────
-// Constructs a domain-specific system prompt for professional EN→AR
-// translation, enriched with selective RAG context from the LTE corpus.
-
-/**
- * Build a structured system prompt for EN→AR CAT translation.
- *
- * The prompt follows a strict format that instructs the model to:
- *   1. Use glossary terms preferentially where applicable
- *   2. Maintain terminological consistency across the translation
- *   3. Produce natural, fluent Arabic — not literal word-for-word
- *   4. Output ONLY the Arabic text, no commentary
- *
- * @param ragEntries - Top-k relevant glossary/TM entries from LTE
- * @returns Formatted system prompt string
- */
-function buildSystemPrompt(ragEntries: Array<CorpusEntry & { score: number }>): string {
-  // Base instructions — professional EN→AR CAT translator persona
-  const baseInstructions = [
-    "You are a professional English-to-Arabic translator specializing in Computer-Assisted Translation (CAT) workflows.",
-    "Your task is to translate the given English text into natural, accurate, and fluent Arabic.",
-    "Follow these rules strictly:",
-    "1. Use the reference glossary terms preferentially wherever they apply.",
-    "2. Maintain terminological consistency — if a term appears multiple times, translate it the same way each time.",
-    "3. Produce Modern Standard Arabic (فصحى) suitable for professional/academic contexts.",
-    "4. Do NOT add explanations, notes, transliterations, or commentary.",
-    "5. Output ONLY the Arabic translation — nothing else.",
-  ].join("\n");
-
-  // RAG context section — only included when we have relevant entries
-  let ragContext = "";
-  if (ragEntries.length > 0) {
-    const formattedEntries = ragEntries
-      .map((e) => `  • "${e.en}" → "${e.ar}"`)
-      .join("\n");
-    ragContext = `\n\nReference glossary (use these terms preferentially where applicable):\n${formattedEntries}`;
-  }
-
-  return baseInstructions + ragContext;
-}
-
 // ─── Core Functions ────────────────────────────────────────────────
+//
+// NOTE: This module previously held its own duplicated EN→AR system/user
+// prompt strings. They have been removed in favour of the shared
+// `buildRAGSystemPrompt()` / `buildUserPrompt()` helpers from
+// `./llm-adapter.ts`, which are direction-aware and are also used by
+// the Ollama adapter. Keeping a single source of truth for the prompt
+// prevents the three tiers (LTE / local LLM / Gemini) from drifting
+// apart again — see PHASE 1 task 1.2 in the project brief.
 
 /**
  * Load a model into WebGPU memory.
@@ -270,13 +242,17 @@ export async function unloadModel(): Promise<void> {
  * This is the basic inference function used as a fallback when the LTE
  * corpus is empty and no RAG context is available.
  *
- * @param sourceText - The source text to translate (English)
- * @param targetPrefix - The already-typed Arabic prefix to condition on
+ * @param sourceText - The source text to translate
+ * @param targetPrefix - The already-typed target-language prefix to condition on
+ * @param direction - Translation direction ("en-ar" or "ar-en"). Defaults to
+ *                    "en-ar" for backward compatibility with callers that
+ *                    haven't been updated yet.
  * @returns Array of translation candidate strings
  */
 export async function generateLocalTranslation(
   sourceText: string,
-  targetPrefix: string
+  targetPrefix: string,
+  direction: TranslationDirection = "en-ar"
 ): Promise<string[]> {
   if (!engine || !currentModelId) {
     console.warn("[LocalLLM] No model loaded — cannot generate.");
@@ -288,11 +264,8 @@ export async function generateLocalTranslation(
   notifySubscribers();
 
   try {
-    const systemPrompt = `You are a professional English-to-Arabic translator specializing in Computer-Assisted Translation (CAT) workflows. Translate the given English text into natural, accurate, and fluent Modern Standard Arabic. Only output the Arabic translation, nothing else. Do not add explanations, notes, or transliterations.`;
-
-    const userPrompt = targetPrefix.trim()
-      ? `Translate the following English text to Arabic. The translation must start with: "${targetPrefix.trim()}"\n\nEnglish: ${sourceText}\nArabic:`
-      : `Translate the following English text to Arabic.\n\nEnglish: ${sourceText}\nArabic:`;
+    const systemPrompt = buildRAGSystemPrompt(undefined, direction);
+    const userPrompt = buildUserPrompt(sourceText, targetPrefix, direction);
 
     const reply = await engine.chat.completions.create({
       messages: [
@@ -337,16 +310,20 @@ export async function generateLocalTranslation(
  *   - Glossary-aware translation with terminological consistency enforcement
  *   - Falls back to non-RAG translation if no relevant entries found
  *   - Caches the result in the prefetch cache for instant ghost-text
+ *   - Direction-aware: prompts and LTE search both branch on direction
  *
- * @param sourceText - The source text to translate (English)
- * @param targetPrefix - The already-typed Arabic prefix to condition on
+ * @param sourceText - The source text to translate
+ * @param targetPrefix - The already-typed target-language prefix to condition on
  * @param topK - Maximum number of glossary entries to include as RAG context
+ * @param direction - Translation direction ("en-ar" or "ar-en"). Defaults to
+ *                    "en-ar" for backward compatibility.
  * @returns Array of translation candidate strings
  */
 export async function generateRAGTranslation(
   sourceText: string,
   targetPrefix: string,
-  topK = 5
+  topK = 5,
+  direction: TranslationDirection = "en-ar"
 ): Promise<string[]> {
   if (!engine || !currentModelId) {
     console.warn("[LocalLLM] No model loaded — cannot generate RAG translation.");
@@ -359,17 +336,19 @@ export async function generateRAGTranslation(
 
   try {
     // ── Selective RAG: Retrieve top-k relevant glossary entries ──
+    // LTE.search() is direction-aware: it matches against the source
+    // field for the active direction so AR→EN queries match on Arabic.
     const lte = getLTE();
     const ragEntries: Array<CorpusEntry & { score: number }> = lte.getStats().entries > 0
-      ? lte.search(sourceText, topK)
+      ? lte.search(sourceText, topK, direction)
       : [];
 
-    // Build the structured system prompt with RAG context
-    const systemPrompt = buildSystemPrompt(ragEntries);
-
-    const userPrompt = targetPrefix.trim()
-      ? `Translate the following English text to Arabic. The translation must start with: "${targetPrefix.trim()}"\n\nEnglish: ${sourceText}\nArabic:`
-      : `Translate the following English text to Arabic.\n\nEnglish: ${sourceText}\nArabic:`;
+    // Build the structured system + user prompts via the shared
+    // direction-aware builders. This is the same path used by the
+    // Ollama adapter, so all local-LLM tiers share identical prompt
+    // logic and stay in sync.
+    const systemPrompt = buildRAGSystemPrompt(ragEntries, direction);
+    const userPrompt = buildUserPrompt(sourceText, targetPrefix, direction);
 
     const reply = await engine.chat.completions.create({
       messages: [
@@ -413,9 +392,14 @@ export async function generateRAGTranslation(
  * it is returned immediately without calling the LLM.
  *
  * @param sourceText - The source text to pre-translate
+ * @param direction - Translation direction ("en-ar" or "ar-en"). Defaults
+ *                    to "en-ar" for backward compatibility.
  * @returns The cached or freshly generated translation, or null on failure
  */
-export async function prefetchTranslation(sourceText: string): Promise<string | null> {
+export async function prefetchTranslation(
+  sourceText: string,
+  direction: TranslationDirection = "en-ar"
+): Promise<string | null> {
   // Check prefetch cache first
   const cached = getPrefetch(sourceText);
   if (cached) {
@@ -426,7 +410,7 @@ export async function prefetchTranslation(sourceText: string): Promise<string | 
   // Also check LTE for an instant match
   const lte = getLTE();
   if (lte.getStats().entries > 0) {
-    const lteResult = lte.getSuggestion(sourceText, "");
+    const lteResult = lte.getSuggestion(sourceText, "", direction);
     if (lteResult && lteResult.match) {
       cachePrefetch(sourceText, lteResult.match);
       return lteResult.match;
@@ -436,7 +420,7 @@ export async function prefetchTranslation(sourceText: string): Promise<string | 
   // If a model is loaded, use RAG translation for the prefetch
   if (engine && currentModelId && engineState === "ready") {
     try {
-      const candidates = await generateRAGTranslation(sourceText, "", 5);
+      const candidates = await generateRAGTranslation(sourceText, "", 5, direction);
       if (candidates.length > 0) {
         return candidates[0];
       }

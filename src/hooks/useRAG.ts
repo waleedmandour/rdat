@@ -1,6 +1,7 @@
 import { useState, useCallback, useEffect } from "react";
 import { RAGState } from "../types";
 import { getLTE } from "../lib/local-translation-engine";
+import type { TranslationDirection } from "../stores/workspace-store";
 
 /**
  * Hook that tracks the RAG (Retrieval-Augmented Generation) state.
@@ -51,9 +52,15 @@ export function useRAG() {
     return () => clearInterval(refreshInterval);
   }, []);
 
-  const lteSearch = useCallback((query: string, limit = 5) => {
-    return getLTE().search(query, limit);
-  }, []);
+  const lteSearch = useCallback(
+    (query: string, limit = 5, direction: TranslationDirection = "en-ar") => {
+      // Forward direction so LTE.search() matches on the correct source
+      // field. Defaults to "en-ar" for backward compatibility.
+      // See PHASE 1 task 1.1.
+      return getLTE().search(query, limit, direction);
+    },
+    []
+  );
 
   /**
    * Force-refresh the RAG state — call after glossary imports or syncs

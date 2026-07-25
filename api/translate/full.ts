@@ -1,15 +1,21 @@
 /**
  * Vercel Serverless Function: /api/translate/full
  *
- * Generates a full Arabic translation of the given English source text
- * using Gemini 2.5 Flash. Optionally conditions on a typed Arabic prefix.
+ * Generates a full translation of the given source text using Gemini
+ * 2.5 Flash. Optionally conditions on a typed target-language prefix.
+ *
+ * Direction-aware (PHASE 1): accepts a `direction: "en-ar" | "ar-en"`
+ * field in the request body and builds a direction-appropriate prompt.
+ * Defaults to "en-ar" when the field is absent for backward
+ * compatibility with older clients.
  *
  * Uses the modern Web Standard fetch handler (ESM-compatible).
  *
- * Body: { sourceText: string, targetPrefix?: string, geminiApiKey?: string }
+ * Body: { sourceText: string, targetPrefix?: string, direction?: "en-ar"|"ar-en", geminiApiKey?: string }
  * Response: { translation: string }
  */
 import { getAI } from "../_lib/gemini";
+import { buildFullPrompt, type TranslationDirection } from "../_lib/prompts";
 
 export default {
   async fetch(request: Request) {
@@ -18,9 +24,15 @@ export default {
     }
 
     try {
-      const { sourceText, targetPrefix, geminiApiKey } = await request.json() as {
+      const {
+        sourceText,
+        targetPrefix,
+        direction,
+        geminiApiKey,
+      } = await request.json() as {
         sourceText?: string;
         targetPrefix?: string;
+        direction?: TranslationDirection;
         geminiApiKey?: string;
       };
 
@@ -28,14 +40,12 @@ export default {
         return Response.json({ error: "Missing sourceText parameter." }, { status: 400 });
       }
 
+      // Validate direction — fall back to "en-ar" for unknown / missing values.
+      const dir: TranslationDirection =
+        direction === "ar-en" || direction === "en-ar" ? direction : "en-ar";
+
       const ai = getAI(geminiApiKey);
-
-      const systemPrompt = `Translate the following English sentence to Arabic:
-"${sourceText}"
-
-${targetPrefix ? `The translation MUST start with this pre-written prefix: "${targetPrefix}"` : ""}
-Provide a fluent translation in standard professional Arabic appropriate for technical translation workflows.
-Return ONLY the raw Arabic translation. No quotes, no explanations, no boilerplate.`;
+      const systemPrompt = buildFullPrompt(sourceText, targetPrefix || "", dir);
 
       const response = await ai.models.generateContent({
         model: "gemini-2.5-flash",

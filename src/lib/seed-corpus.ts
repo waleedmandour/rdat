@@ -2,13 +2,40 @@
  * Default seed corpus for the Local Translation Engine (LTE).
  *
  * On a fresh install, the LTE has zero entries in its IndexedDB corpus,
- * which means Tier 1 (dictionary/n-gram matching) always returns null.
- * This seed corpus provides ~80 common EN→AR translation pairs covering
+ * which means Tier 0 (dictionary/n-gram matching) always returns null.
+ * This seed corpus provides ~85 common EN→AR translation pairs covering
  * professional/technical translation terminology so that the LTE can
  * produce ghost-text suggestions immediately after installation.
  *
  * The corpus is loaded into the LTE only when IndexedDB has zero entries,
  * ensuring it never overwrites user-imported data.
+ *
+ * ─────────────────────────────────────────────────────────────────
+ * PHASE 1 task 1.6 — DICTIONARY SCOPE WARNING
+ * ─────────────────────────────────────────────────────────────────
+ * The current ~85 entries are a hand-picked starter set, NOT a
+ * comprehensive bidirectional dictionary. The project brief explicitly
+ * calls for "several thousand entries minimum" sourced from a licensed
+ * or properly-attributed EN↔AR dictionary dataset.
+ *
+ * We have NOT fabricated dictionary content here. Doing so would
+ * produce plausible-looking but wrong translations that would silently
+ * poison the ghost-text suggestions. The LTE itself is already
+ * bidirectional (see `load()` in local-translation-engine.ts — it builds
+ * both en-index and ar-index), so the moment a real dataset is dropped
+ * in here as an additional `CorpusEntry[]`, AR→EN lookups will work
+ * end-to-end without further code changes.
+ *
+ * TODO (project owner): Source a licensed EN↔AR dictionary dataset
+ * (e.g. CC-BY wordlist, Wiktionary extract, or a commercial TM
+ * export) and either:
+ *   (a) ship it as a static JSON asset loaded lazily on first run, or
+ *   (b) ship it as a pre-populated IndexedDB blob imported on first run.
+ * Then delete this warning.
+ *
+ * Until then, AR→EN ghost-text will work end-to-end only via Tier 1
+ * (local LLM) and Tier 2 (Gemini) — Tier 0 will only hit on the ~85
+ * seed entries above.
  */
 import type { CorpusEntry } from "./local-translation-engine";
 
