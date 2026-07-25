@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { X, Sparkles, Download } from "lucide-react";
 import { isTauriEnvironment } from "../lib/adapters/ollama-adapter";

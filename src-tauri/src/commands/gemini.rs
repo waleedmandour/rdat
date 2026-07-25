@@ -136,7 +136,13 @@ pub async fn gemini_translate(req: GeminiTranslateRequest) -> Result<GeminiTrans
     }
 
     let model = if req.model.is_empty() { "gemini-2.5-flash".to_string() } else { req.model.clone() };
-    let url = format!("{}/{}:generateContent?key={}", GEMINI_BASE_URL, model, req.api_key.trim());
+    // SECURITY (audit fix #1): The API key is sent via the
+    // `x-goog-api-key` HTTP header instead of as a URL query parameter.
+    // URL query strings are logged by HTTP proxies, can appear in OS
+    // network diagnostics, and (per Google's own guidance) should not
+    // be used for credentials. The header is the documented secure
+    // transport for Gemini API keys.
+    let url = format!("{}/{}:generateContent", GEMINI_BASE_URL, model);
 
     let body = GeminiRequestBody {
         system_instruction: GeminiContent {
@@ -156,7 +162,13 @@ pub async fn gemini_translate(req: GeminiTranslateRequest) -> Result<GeminiTrans
     eprintln!("[gemini_translate] model={} max_tokens={}", model, req.max_tokens);
 
     let client = http_client();
-    let resp = match client.post(&url).json(&body).send().await {
+    let resp = match client
+        .post(&url)
+        .header("x-goog-api-key", req.api_key.trim())
+        .json(&body)
+        .send()
+        .await
+    {
         Ok(r) => r,
         Err(e) => {
             return Ok(GeminiTranslateResponse {

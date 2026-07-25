@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback, useRef } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 import { useWorkspaceStore } from "../../stores/workspace-store";
@@ -247,7 +247,18 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       const sourceLang = isArToEn ? "ar" : "en";
       const targetLang = isArToEn ? "en" : "ar";
 
-      const newEntry: Omit<SegmentEntry, "id"> = {
+      // Audit fix #6: deterministic string id keyed on direction +
+      // segment index. Re-confirming an edited segment now upserts
+      // (overwrites the prior row) instead of appending a duplicate.
+      // The id format is "{sourceLang}-{targetLang}-{idx}" which is
+      // unique per (direction, segment) pair — switching direction
+      // produces different ids, which is correct because an AR→EN
+      // segment-3 confirmation is a different translation from an
+      // EN→AR segment-3 confirmation.
+      const segmentId = `${sourceLang}-${targetLang}-${idx}`;
+
+      const newEntry: SegmentEntry = {
+        id: segmentId,
         source: sentences[idx],
         target: text,
         source_lang: sourceLang,

@@ -2,7 +2,7 @@
 
 **Professional Bidirectional English↔Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Version](https://img.shields.io/badge/Version-0.3.0-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.3.0)
+[![Version](https://img.shields.io/badge/Version-0.3.1-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.3.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
@@ -13,9 +13,9 @@
 
 ## Overview
 
-RDAT: Translation Copilot is an AI-powered translation workspace purpose-built for professional **bidirectional English↔Arabic** translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline, from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback, delivering real-time suggestions while keeping translators in full control of every word. As of v0.3.0, both EN→AR and AR→EN directions are fully supported end-to-end across all three tiers.
+RDAT: Translation Copilot is an AI-powered translation workspace purpose-built for professional **bidirectional English↔Arabic** translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline, from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback, delivering real-time suggestions while keeping translators in full control of every word. As of v0.3.1, both EN→AR and AR→EN directions are fully supported end-to-end across all three tiers.
 
-As of v0.3.0, RDAT ships in **two complementary forms**, sharing a single React/Vite frontend:
+As of v0.3.1, RDAT ships in **two complementary forms**, sharing a single React/Vite frontend:
 
 | Distribution | Best for | Install size | Local LLM |
 |---|---|---|---|
@@ -23,6 +23,44 @@ As of v0.3.0, RDAT ships in **two complementary forms**, sharing a single React/
 | **PWA on Vercel** (browser) | Try-before-install; mobile; locked-down machines | Zero install (browser) | WebLLM via WebGPU (optional) |
 
 The system's primary engine is the **local LLM** (Ollama in desktop mode, WebLLM in browser mode). Gemini 2.5 Flash is a **secondary fallback** for when local tiers yield low confidence, complex passages, or when no local model is available. This local-first architecture ensures data privacy and offline capability: the Local Translation Engine (LTE) and on-device LLM models operate without any network egress, while glossary databases, translation memories, and segment history persist across sessions through IndexedDB.
+
+---
+
+## What's New in v0.3.1
+
+v0.3.1 is a security and reliability release that fixes all 14 issues identified in the comprehensive repository audit. No new features — just hardening.
+
+### Security
+- **API key transport** (`src-tauri/src/commands/gemini.rs`): Gemini API key now sent via `x-goog-api-key` header instead of URL query parameter. URL query strings are logged by proxies and OS network diagnostics.
+- **API key storage** (`src/stores/settings-store.ts`, `src/components/ApiKeysView.tsx`): key is no longer persisted to localStorage by default. Held in memory only and cleared on app close. Users can opt in to persistence via a new "Remember API key on this device" checkbox. One-time migration wipes any pre-existing key from older versions.
+- **Content Security Policy** (`src-tauri/tauri.conf.json`): strict CSP enabled (was `null`). `script-src 'self'` blocks injected scripts; `connect-src` whitelists Ollama + Gemini endpoints; `frame-src 'none'` and `object-src 'none'` block iframes and plugins.
+- **Vercel function abuse protection** (`api/_lib/rate-limit.ts`, all 3 endpoints): per-IP rate limiting (30 req/min, 200 req/hour) and input-size caps (10k chars sourceText, 5k chars targetPrefix). Returns 429 with `Retry-After` header on limit exceeded, 413 on oversized input.
+
+### Reliability
+- **IndexedDB connection leak** (`src/lib/dual-storage.ts`): `openDB()` now caches a single `IDBDatabase` connection instead of opening a new one per call. Previously, long sessions could exhaust the browser's ~75-connection cap and silently fail all DB operations. The cached connection auto-recovers if unexpectedly closed.
+- **React Error Boundary** (`src/components/ErrorBoundary.tsx`, `src/App.tsx`, `src/components/WorkspaceShell.tsx`): top-level + per-panel boundaries catch uncaught render errors and show a fallback UI with "Try again" / "Reload page" buttons. A crash in one panel no longer takes down the whole app.
+- **Vercel warmup in Tauri** (`src/main.tsx`): warmup interval now guarded by `isTauriEnvironment()`. Previously, the Tauri desktop app made a useless 404-ing fetch every 4 minutes forever.
+- **useGemini retry logic** (`src/lib/gemini-direct.ts`, `src/hooks/useGemini.ts`): errors are now classified as `RetryableError` (network / 5xx / 429) or `FatalError` (4xx). Fatal errors are re-thrown immediately instead of being retried twice — saves API quota and 2s of latency on bad-key / malformed-request errors.
+
+### Data Integrity
+- **Segment duplicates** (`src/lib/dual-storage.ts`, `src/components/editors/TranslationWorkspace.tsx`): segments store migrated from autoIncrement-int to deterministic string ids (`"{sourceLang}-{targetLang}-{idx}"`). Re-confirming an edited segment now upserts instead of creating a duplicate. DB schema bumped to v3 with a drop-and-recreate migration (acceptable because old data was full of duplicates anyway).
+- **Glossary ID collisions** (`src/components/GlossaryView.tsx`, `src/types.ts`): reference-DB entries now use string ids (`"{dbId}-{idx}"`) instead of hardcoded numeric ranges (10000+/20000+/30000+). JSON-uploaded entries no longer compute client-side `Date.now()+idx` ids — they omit `id` entirely and let IndexedDB autoIncrement. Eliminates the silent-overwrite risk when uploads and reference DBs coexisted.
+
+### Architecture & Configuration
+- **Over-permissioned Tauri capabilities** (`src-tauri/capabilities/default.json`): removed unused `dialog:allow-open`, `dialog:allow-save`, `fs:allow-read-text-file`, `fs:allow-write-text-file` permissions. File imports go through the browser's native `<input type=file>`, not the Tauri fs/dialog plugins, so these were unused attack surface.
+- **Tauri updater signing** (`src-tauri/Cargo.toml`, `src-tauri/src/lib.rs`, `src-tauri/tauri.conf.json`, `.github/workflows/release.yml`): updater plugin re-enabled with a generated signing keypair. Private key stored as `TAURI_SIGNING_PRIVATE_KEY` GitHub Actions secret; public key set in `tauri.conf.json → plugins.updater.pubkey`. Release workflow now signs bundles and uploads `latest.json` so the app can auto-update. (OS-level code signing — Apple Developer ID / Windows cert — still requires paid certificates and is deferred.)
+- **Vulnerable dependencies** (`package.json`, `package-lock.json`): `npm audit fix` cleared the high-severity postcss path-traversal advisory and the moderate protobufjs DoS advisory. `npm audit` now reports 0 vulnerabilities.
+- **cargo-audit in CI** (`.github/workflows/ci.yml`): the CI workflow now runs `cargo audit --deny warnings` against `src-tauri/Cargo.lock` on every push/PR. Any RUSTSEC advisory in a Rust transitive dependency will fail the build.
+
+### Verification
+- `npm run lint`: clean (with `noUnusedLocals`/`noUnusedParameters` strict flags).
+- `npm audit`: 0 vulnerabilities.
+- `npx vite build`: succeeds (5.96s).
+- `scripts/test-bidirectional-lte.ts`: 12/12 pass.
+- `scripts/test-phase3-regression.ts`: 30/30 pass.
+- Rust source files parse cleanly via `rustfmt --check`.
+- All workflow YAML files validate.
+- Tauri signing private key registered as GitHub Actions secret.
 
 ---
 
@@ -427,13 +465,13 @@ On first launch, if Ollama is not running, the onboarding modal will guide you t
 **Windows (use NSIS to avoid WiX path issues):**
 ```powershell
 npm run tauri:build -- --bundles nsis
-# Output: src-tauri\target\release\bundle\nsis\RDAT Copilot_0.3.0_x64-setup.exe
+# Output: src-tauri\target\release\bundle\nsis\RDAT Copilot_0.3.1_x64-setup.exe
 ```
 
 **macOS:**
 ```bash
 npm run tauri:build
-# Output: src-tauri/target/release/bundle/dmg/RDAT Copilot_0.3.0_aarch64.dmg
+# Output: src-tauri/target/release/bundle/dmg/RDAT Copilot_0.3.1_aarch64.dmg
 ```
 
 **Linux:**
@@ -536,7 +574,7 @@ For architectural details, adapter patterns, and migration notes, see [TAURI-MIG
 
 If you use RDAT: Translation Copilot in academic work, please cite:
 
-> Mandour, W. (2026). *RDAT: Translation Copilot (Version 0.3.0)* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21256765
+> Mandour, W. (2026). *RDAT: Translation Copilot (Version 0.3.1)* [Computer software]. Zenodo. https://doi.org/10.5281/zenodo.21256765
 
 ---
 

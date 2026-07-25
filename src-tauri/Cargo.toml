@@ -1,6 +1,6 @@
 [package]
 name = "rdat"
-version = "0.3.0"
+version = "0.3.1"
 description = "RDAT Copilot — Professional bidirectional EN↔AR CAT Environment"
 authors = ["Dr. Waleed Mandour <w.abumandour@squ.edu.om>"]
 license = "MIT"
@@ -24,8 +24,11 @@ tauri-plugin-shell = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-fs = "2"
 tauri-plugin-process = "2"
-# NOTE: tauri-plugin-updater disabled in v0.2.0 (requires signing keypair)
-# Re-enable in v0.3.0 after generating keys with: npx @tauri-apps/cli signer generate
+# Audit fix #13 (cheap): updater re-enabled with a generated signing
+# keypair. The private key is stored as a GitHub Actions secret
+# (TAURI_SIGNING_PRIVATE_KEY) and never committed to the repo. The
+# public key is set in tauri.conf.json → plugins.updater.pubkey.
+tauri-plugin-updater = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json", "stream"] }

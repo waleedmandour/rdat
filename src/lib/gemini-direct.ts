@@ -276,47 +276,112 @@ async function tauriGeminiTutor(req: GeminiTutorRequest): Promise<GeminiTutorRes
 
 // ─── PWA (Vercel function) implementations ───────────────────────
 
-async function pwaGeminiBurst(req: GeminiBurstRequest): Promise<GeminiBurstResponse> {
-  const response = await fetch("/api/translate/burst", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
-  if (!response.ok) {
+/**
+ * Error classification (audit fix #8): the useGemini hook's withRetry
+ * wrapper used to retry on ANY thrown error — including HTTP 4xx
+ * (invalid API key, malformed request, rate limit). Retrying a 401
+ * twice with backoff just delays the error and burns the user's API
+ * quota. We now throw RetryableError only for network errors and HTTP
+ * 5xx; 4xx throws FatalError. withRetry catches RetryableError and
+ * re-throws FatalError immediately.
+ */
+export class RetryableError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "RetryableError";
+  }
+}
+export class FatalError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FatalError";
+  }
+}
+
+/**
+ * Parse a fetch failure into either RetryableError (network error or
+ * HTTP 5xx) or FatalError (HTTP 4xx). Used by all three pwaGemini*
+ * helpers so the useGemini retry wrapper can decide whether to retry.
+ */
+async function classifyFetchError(
+  response: Response | null,
+  networkErr?: unknown
+): Promise<Error> {
+  // Network-level failure (DNS, connection refused, CORS, etc.) — retryable.
+  if (!response) {
+    const msg = networkErr instanceof Error ? networkErr.message : "Network error";
+    return new RetryableError(msg);
+  }
+  const status = response.status;
+  let bodyMsg = `HTTP ${status}`;
+  try {
     const errText = await response.text();
-    let errMsg = `HTTP ${response.status}`;
-    try { const j = JSON.parse(errText); errMsg = j.error || errMsg; } catch { errMsg = errText.slice(0, 200); }
-    throw new Error(errMsg);
+    try {
+      const j = JSON.parse(errText);
+      bodyMsg = j.error || bodyMsg;
+    } catch {
+      bodyMsg = errText.slice(0, 200) || bodyMsg;
+    }
+  } catch {
+    // response.text() can fail if the body was already consumed; ignore.
+  }
+  // 5xx and 429 (rate limit) are retryable. 429 is technically a 4xx
+  // but the standard practice is to retry with backoff.
+  if (status >= 500 || status === 429) {
+    return new RetryableError(bodyMsg);
+  }
+  // All other 4xx (400, 401, 403, 404, 413, etc.) are fatal — no
+  // point retrying, the request itself is wrong.
+  return new FatalError(bodyMsg);
+}
+
+async function pwaGeminiBurst(req: GeminiBurstRequest): Promise<GeminiBurstResponse> {
+  let response: Response | null = null;
+  try {
+    response = await fetch("/api/translate/burst", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  } catch (e) {
+    throw await classifyFetchError(null, e);
+  }
+  if (!response.ok) {
+    throw await classifyFetchError(response);
   }
   return response.json();
 }
 
 async function pwaGeminiFull(req: GeminiFullRequest): Promise<GeminiFullResponse> {
-  const response = await fetch("/api/translate/full", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
+  let response: Response | null = null;
+  try {
+    response = await fetch("/api/translate/full", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  } catch (e) {
+    throw await classifyFetchError(null, e);
+  }
   if (!response.ok) {
-    const errText = await response.text();
-    let errMsg = `HTTP ${response.status}`;
-    try { const j = JSON.parse(errText); errMsg = j.error || errMsg; } catch { errMsg = errText.slice(0, 200); }
-    throw new Error(errMsg);
+    throw await classifyFetchError(response);
   }
   return response.json();
 }
 
 async function pwaGeminiTutor(req: GeminiTutorRequest): Promise<GeminiTutorResponse> {
-  const response = await fetch("/api/translate/tutor-explain", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(req),
-  });
+  let response: Response | null = null;
+  try {
+    response = await fetch("/api/translate/tutor-explain", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(req),
+    });
+  } catch (e) {
+    throw await classifyFetchError(null, e);
+  }
   if (!response.ok) {
-    const errText = await response.text();
-    let errMsg = `HTTP ${response.status}`;
-    try { const j = JSON.parse(errText); errMsg = j.error || errMsg; } catch { errMsg = errText.slice(0, 200); }
-    throw new Error(errMsg);
+    throw await classifyFetchError(response);
   }
   return response.json();
 }

@@ -1,4 +1,3 @@
-import React from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { Sliders, Trash2 } from "lucide-react";
 import { useDualStorage } from "../hooks/useDualStorage";

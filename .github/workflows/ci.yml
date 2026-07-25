@@ -42,6 +42,16 @@ jobs:
       - name: Vite production build
         run: npm run build
 
+      # Audit fix #14: scan Rust dependencies for known RUSTSEC advisories.
+      # Runs cargo-audit against src-tauri/Cargo.lock. Fails the build if
+      # any advisory is found, so a vulnerable transitive dep can't ship.
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
+      - name: Run cargo-audit on Rust dependencies
+        working-directory: src-tauri
+        run: cargo audit --deny warnings
+
       - name: Upload Vite build artifact
         uses: actions/upload-artifact@v4
         with:

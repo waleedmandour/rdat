@@ -16,11 +16,26 @@
  */
 import { getAI } from "../_lib/gemini";
 import { buildFullPrompt, type TranslationDirection } from "../_lib/prompts";
+import { checkRateLimit, checkInputSize } from "../_lib/rate-limit";
 
 export default {
   async fetch(request: Request) {
     if (request.method !== "POST") {
       return Response.json({ error: "Method not allowed. Use POST." }, { status: 405 });
+    }
+
+    // SECURITY (audit fix #4): per-IP rate limiting.
+    const rl = checkRateLimit(request);
+    if (!rl.allowed) {
+      return Response.json(
+        { error: rl.reason || "Rate limit exceeded" },
+        {
+          status: 429,
+          headers: rl.retryAfterSeconds
+            ? { "Retry-After": String(rl.retryAfterSeconds) }
+            : undefined,
+        }
+      );
     }
 
     try {
@@ -38,6 +53,11 @@ export default {
 
       if (!sourceText) {
         return Response.json({ error: "Missing sourceText parameter." }, { status: 400 });
+      }
+
+      const sizeCheck = checkInputSize(sourceText, targetPrefix);
+      if (!sizeCheck.ok) {
+        return Response.json({ error: sizeCheck.error }, { status: 413 });
       }
 
       // Validate direction — fall back to "en-ar" for unknown / missing values.

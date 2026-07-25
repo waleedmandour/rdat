@@ -29,7 +29,14 @@ export interface TMEntry {
 }
 
 export interface GlossaryEntry {
-  id: number;
+  /**
+   * Audit fix #7: id is now `number | string`. Manually-added and
+   * JSON-uploaded entries get auto-incremented numeric ids from
+   * IndexedDB; reference-DB entries get deterministic string ids of
+   * the form "{dbId}-{idx}" so they can't collide with numeric ids
+   * and can be removed as a group when the user toggles the DB off.
+   */
+  id: number | string;
   source_term: string;
   target_term: string;
   source_lang: string;
@@ -49,7 +56,14 @@ export interface GlossaryEntry {
 }
 
 export interface SegmentEntry {
-  id: number;
+  /**
+   * Audit fix #6: id is now `number | string`. Confirmed segments use
+   * a deterministic string id ("{sourceLang}-{targetLang}-{idx}") so
+   * re-confirming an edited segment upserts instead of duplicating.
+   * The DB schema was bumped to v3 to drop the old autoIncrement-int
+   * segments store and recreate with this mixed-key schema.
+   */
+  id: number | string;
   source: string;
   target: string;
   source_lang: string;

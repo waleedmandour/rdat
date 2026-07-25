@@ -18,11 +18,11 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_fs::init())
         .plugin(tauri_plugin_process::init())
-        // NOTE: Updater plugin disabled in v0.2.0 — requires signing keypair
-        // which is not yet generated. Re-enable in v0.3.0 after running:
-        //   npx @tauri-apps/cli signer generate -w ~/.tauri/rdat.key
-        // and setting tauri.conf.json → plugins.updater.pubkey + active: true
-        // .plugin(tauri_plugin_updater::Builder::new().build())
+        // Audit fix #13 (cheap): updater plugin enabled with a generated
+        // signing keypair. The release workflow signs the bundle with
+        // TAURI_SIGNING_PRIVATE_KEY (GitHub Actions secret) and uploads
+        // latest.json to the release assets so the app can auto-update.
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             // ── Ollama commands (PRIMARY engine) ──
             ollama_health,

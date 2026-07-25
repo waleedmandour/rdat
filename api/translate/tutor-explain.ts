@@ -18,11 +18,26 @@
  */
 import { getAI } from "../_lib/gemini";
 import { buildTutorPrompt, type TranslationDirection } from "../_lib/prompts";
+import { checkRateLimit, checkInputSize, MAX_SOURCE_TEXT_LENGTH } from "../_lib/rate-limit";
 
 export default {
   async fetch(request: Request) {
     if (request.method !== "POST") {
       return Response.json({ error: "Method not allowed. Use POST." }, { status: 405 });
+    }
+
+    // SECURITY (audit fix #4): per-IP rate limiting.
+    const rl = checkRateLimit(request);
+    if (!rl.allowed) {
+      return Response.json(
+        { error: rl.reason || "Rate limit exceeded" },
+        {
+          status: 429,
+          headers: rl.retryAfterSeconds
+            ? { "Retry-After": String(rl.retryAfterSeconds) }
+            : undefined,
+        }
+      );
     }
 
     try {
@@ -38,6 +53,19 @@ export default {
         return Response.json(
           { error: "Missing sourceText or targetText parameter." },
           { status: 400 }
+        );
+      }
+
+      // Cap both sourceText and targetText. tutor-explain doesn't use
+      // targetPrefix, but we still cap targetText to prevent abuse.
+      const sizeCheckSrc = checkInputSize(sourceText, undefined);
+      if (!sizeCheckSrc.ok) {
+        return Response.json({ error: sizeCheckSrc.error }, { status: 413 });
+      }
+      if (typeof targetText === "string" && targetText.length > MAX_SOURCE_TEXT_LENGTH) {
+        return Response.json(
+          { error: `targetText too long (${targetText.length} chars; max ${MAX_SOURCE_TEXT_LENGTH}).` },
+          { status: 413 }
         );
       }
 

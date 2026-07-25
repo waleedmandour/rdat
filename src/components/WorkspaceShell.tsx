@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import { useState, useEffect } from "react";
 import { Sidebar } from "./Sidebar";
 import { StatusBar } from "./StatusBar";
 import { NavItem } from "../types";
@@ -13,6 +13,7 @@ import { QuickGuideModal } from "./QuickGuideModal";
 import { WelcomeWindow, shouldShowWelcome } from "./WelcomeWindow";
 import { OllamaOnboardingModal, shouldShowOllamaOnboarding } from "./OllamaOnboardingModal";
 import { InstallPWAButton } from "./InstallPWAButton";
+import { ErrorBoundary } from "./ErrorBoundary";
 import { useLanguage } from "../context/LanguageContext";
 import { useToast } from "../context/ToastContext";
 import { useSettingsStore } from "../stores/settings-store";
@@ -194,21 +195,50 @@ export function WorkspaceShell() {
     settings: t("workspace.title.settings"),
   };
 
-  // Render individual panels reactively
+  // Render individual panels reactively.
+  // Audit fix #10: each panel is wrapped in its own ErrorBoundary so
+  // a render crash in one panel (e.g. a malformed glossary entry that
+  // breaks GlossaryView) doesn't take down the rest of the app. The
+  // user can navigate away and back, or click "Try again" in the
+  // fallback UI to reset the boundary state.
   const renderView = () => {
     switch (activeNav) {
       case "translator":
-        return <TranslationWorkspace />;
+        return (
+          <ErrorBoundary label="Translator">
+            <TranslationWorkspace />
+          </ErrorBoundary>
+        );
       case "glossary":
-        return <GlossaryView />;
+        return (
+          <ErrorBoundary label="Glossary">
+            <GlossaryView />
+          </ErrorBoundary>
+        );
       case "models":
-        return <AiModelsView />;
+        return (
+          <ErrorBoundary label="Models">
+            <AiModelsView />
+          </ErrorBoundary>
+        );
       case "api-keys":
-        return <ApiKeysView />;
+        return (
+          <ErrorBoundary label="API Keys">
+            <ApiKeysView />
+          </ErrorBoundary>
+        );
       case "settings":
-        return <SettingsPanel />;
+        return (
+          <ErrorBoundary label="Settings">
+            <SettingsPanel />
+          </ErrorBoundary>
+        );
       default:
-        return <WelcomeTab onStart={handleStartEditing} />;
+        return (
+          <ErrorBoundary label="Dashboard">
+            <WelcomeTab onStart={handleStartEditing} />
+          </ErrorBoundary>
+        );
     }
   };
 

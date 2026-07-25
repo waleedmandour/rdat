@@ -124,7 +124,7 @@ export function GlossaryView() {
   // the row with that id renders as an editable form bound to editDraft.
   // Saving calls updateGlossary(editingId, editDraft) and refreshes the
   // LTE via refreshCounts().
-  const [editingId, setEditingId] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<number | string | null>(null);
   const [editDraft, setEditDraft] = useState<{ source_term: string; target_term: string; domain: string }>({
     source_term: "",
     target_term: "",
@@ -175,8 +175,14 @@ export function GlossaryView() {
           if (!srcVal || !tgtVal) {
             throw new Error(`Row ${idx + 1} is missing a valid source or target value.`);
           }
-          return {
-            id: Date.now() + idx,
+          // Audit fix #7: do NOT compute a numeric id client-side.
+          // Previously this was `id: Date.now() + idx` which could
+          // collide with the reference-DB id ranges (10000+/20000+/30000+)
+          // and silently overwrite user data on upsert. Now we omit
+          // `id` entirely and let IndexedDB's autoIncrement handle it.
+          // If the JSON includes an explicit string `id`, honour it.
+          const entry: GlossaryEntry = {
+            id: typeof item.id === "string" ? item.id : (typeof item.id === "number" ? item.id : 0),
             source_term: String(srcVal).trim(),
             target_term: String(tgtVal).trim(),
             // Honour explicit per-row language tags if the JSON
@@ -188,6 +194,13 @@ export function GlossaryView() {
             pos: item.pos || item.type || "noun",
             domain: item.domain || "general"
           };
+          // If no explicit id, delete the placeholder so IndexedDB
+          // autoIncrements. (We can't conditionally omit a property
+          // in an object literal, so set then delete.)
+          if (typeof item.id !== "string" && typeof item.id !== "number") {
+            delete entry.id;
+          }
+          return entry;
         });
 
         // Perform chunked batch-writing to keep browser highly responsive
@@ -229,13 +242,14 @@ export function GlossaryView() {
     }
 
     try {
-      // Tag every entry with a stable id range + source_db so we can
-      // identify and remove them later if the user toggles the DB off.
+      // Audit fix #7: use string ids of the form "{dbId}-{idx}" so
+      // reference-DB entries can NEVER collide with auto-incremented
+      // user entries (which are numeric) or with each other across DBs.
+      // The string prefix also lets us identify and remove all entries
+      // for a specific DB when the user toggles it off via "Use".
       const tagged: GlossaryEntry[] = def.entries.map((e, idx) => ({
         ...e,
-        id: dbId === "wipo" ? 10000 + idx
-          : dbId === "microsoft" ? 20000 + idx
-          : 30000 + idx,
+        id: `${dbId}-${idx}`,
       }));
 
       await importGlossary(tagged, (p) => setImportProgress(p));

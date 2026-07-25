@@ -6,6 +6,8 @@ import {
   geminiBurst,
   geminiFull,
   geminiTutor,
+  RetryableError,
+  FatalError,
 } from "../lib/gemini-direct";
 
 /**
@@ -38,8 +40,11 @@ export function useGemini() {
 
   /**
    * Retry wrapper — calls `fn` up to MAX_RETRIES+1 times.
-   * Retries on any error (network, 5xx, parse). Non-retryable errors
-   * (4xx, missing key) are thrown immediately by the underlying function.
+   *
+   * Audit fix #8: only retries on RetryableError (network errors and
+   * HTTP 5xx/429). FatalError (HTTP 4xx like 401/403/413) is re-thrown
+   * immediately so we don't waste the user's API quota retrying a
+   * request that will never succeed.
    */
   const withRetry = async <T,>(fn: () => Promise<T>): Promise<T> => {
     const MAX_RETRIES = 2;
@@ -50,11 +55,26 @@ export function useGemini() {
         return await fn();
       } catch (err: any) {
         lastError = err;
+        // FatalError (4xx) — don't retry, re-throw immediately.
+        if (err instanceof FatalError) {
+          throw err;
+        }
+        // RetryableError (network / 5xx / 429) — retry with backoff.
+        if (err instanceof RetryableError && attempt < MAX_RETRIES) {
+          const backoff = Math.min(500 * Math.pow(3, attempt), 3000);
+          console.warn(`[useGemini] Retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES}) — ${err?.message || err}`);
+          await new Promise(resolve => setTimeout(resolve, backoff));
+          continue;
+        }
+        // Any other error type (e.g. JSON parse error) — also retry,
+        // since these are often transient (partial response, etc.).
         if (attempt < MAX_RETRIES) {
           const backoff = Math.min(500 * Math.pow(3, attempt), 3000);
           console.warn(`[useGemini] Retrying in ${backoff}ms (attempt ${attempt + 1}/${MAX_RETRIES}) — ${err?.message || err}`);
           await new Promise(resolve => setTimeout(resolve, backoff));
+          continue;
         }
+        throw err;
       }
     }
     throw lastError || new Error("All retry attempts failed");

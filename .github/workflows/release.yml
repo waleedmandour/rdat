@@ -130,16 +130,30 @@ jobs:
       # `--bundles nsis` on Windows skips the WiX/MSI bundler which
       # fails on usernames with spaces (see README). On macOS the
       # --target flag produces a separate .dmg per architecture.
+      #
+      # Audit fix #13 (cheap): the bundle is signed with the Tauri
+      # updater signing key (TAURI_SIGNING_PRIVATE_KEY) stored as a
+      # repo secret. The action also generates and uploads latest.json
+      # to the release, which the app's updater plugin polls to detect
+      # new versions. This enables auto-updates but does NOT provide
+      # OS-level code signing (Apple Developer ID / Windows cert) —
+      # users will still see Gatekeeper/SmartScreen warnings on first
+      # launch. That requires paid certificates (Phase 2 of fix #13).
       - name: Build Tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          # Password is empty — the key was generated with -p "" in CI mode.
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ""
         with:
           tagName: ${{ github.ref_name }}
           releaseName: "RDAT: Translation Copilot ${{ github.ref_name }}"
           releaseDraft: false
           prerelease: false
           args: ${{ matrix.settings.args }}
+          # Tells the action to generate latest.json for the updater plugin.
+          updaterJsonPreferNsis: true
 
       # ── Upload a separate artifact per platform so failed platforms
       # can be re-run without rebuilding the others. The

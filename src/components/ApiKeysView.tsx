@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import { useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useSettingsStore } from "../stores/settings-store";
 import { Key, Eye, EyeOff, CheckCircle2 } from "lucide-react";
@@ -7,7 +7,14 @@ export function ApiKeysView() {
   const { locale, t } = useLanguage();
   const isRTL = locale === "ar";
 
-  const { geminiApiKey, setGeminiApiKey, useCloudFallback, setUseCloudFallback } = useSettingsStore();
+  const {
+    geminiApiKey,
+    setGeminiApiKey,
+    rememberApiKey,
+    setRememberApiKey,
+    useCloudFallback,
+    setUseCloudFallback,
+  } = useSettingsStore();
 
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
@@ -36,9 +43,9 @@ export function ApiKeysView() {
           </div>
 
           <p className="text-[11px] text-muted-foreground leading-relaxed">
-            {isRTL 
-              ? "يتم تدوير وحفظ مفتاحك على جهازك فقط بشكل آمن بالكامل ويُستخدم لإعطاء توقعات شبيهة بغوغل." 
-              : "Your API key is stored securely in your browser's local sandbox storage and processed exclusively via server proxy. It is never transmitted to other entities."}
+            {isRTL
+              ? "يتم حفظ مفتاحك في الذاكرة فقط افتراضياً ويُمحى عند إغلاق التطبيق. إذا أردت الإبقاء عليه بين الجلسات، فعّل خيار «تذكّر المفتاح على هذا الجهاز» أدناه. لا تتم مشاركة المفتاح مع أي طرف ثالث ويُمرَّر حصرياً عبر وكيل الخادم."
+              : "Your API key is held in memory only by default and cleared when the app closes. To persist it between sessions, enable \"Remember API key on this device\" below. The key is never shared with third parties and is forwarded exclusively via the server proxy."}
           </p>
 
           <div className="flex items-center gap-2">
@@ -93,6 +100,26 @@ export function ApiKeysView() {
               type="checkbox"
               checked={useCloudFallback}
               onChange={(e) => setUseCloudFallback(e.target.checked)}
+              className="w-4 h-4 accent-primary"
+            />
+          </div>
+
+          {/* Remember API key opt-in (audit fix #2) */}
+          <div className="flex items-center justify-between pt-3 border-t border-border/40 text-xs">
+            <div>
+              <div className="font-bold text-foreground">
+                {isRTL ? "تذكّر المفتاح على هذا الجهاز" : "Remember API key on this device"}
+              </div>
+              <div className="text-[10.5px] text-muted-foreground mt-0.5">
+                {isRTL
+                  ? "إذا كان مفعّلاً، يُحفظ المفتاح في ذاكرة المتصفح بين الجلسات. معطّل افتراضياً للأمان — المفتاح يُحفظ في الذاكرة فقط ويُمحى عند الإغلاق."
+                  : "When enabled, the key is persisted in browser storage between sessions. Disabled by default for security — the key is held in memory only and cleared on close."}
+              </div>
+            </div>
+            <input
+              type="checkbox"
+              checked={rememberApiKey}
+              onChange={(e) => setRememberApiKey(e.target.checked)}
               className="w-4 h-4 accent-primary"
             />
           </div>

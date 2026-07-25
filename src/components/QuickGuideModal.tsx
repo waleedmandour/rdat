@@ -1,4 +1,3 @@
-import React from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { X, HelpCircle, Lightbulb, GraduationCap, Github, Mail } from "lucide-react";
 

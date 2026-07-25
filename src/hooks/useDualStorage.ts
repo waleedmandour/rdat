@@ -167,7 +167,7 @@ export function useDualStorage() {
     await refreshCounts();
   }, [refreshCounts]);
 
-  const removeGlossary = useCallback(async (id: number) => {
+  const removeGlossary = useCallback(async (id: number | string) => {
     await deleteFromStore("glossary", id);
     await refreshCounts();
   }, [refreshCounts]);
@@ -190,7 +190,7 @@ export function useDualStorage() {
    * immediately. See PHASE 2 task 2.4.
    */
   const updateGlossary = useCallback(
-    async (id: number, changes: Partial<Omit<GlossaryEntry, "id">>) => {
+    async (id: number | string, changes: Partial<Omit<GlossaryEntry, "id">>) => {
       // Read the existing record so we merge instead of overwriting.
       const { getFromStore } = await import("../lib/dual-storage");
       const existing = await getFromStore<GlossaryEntry>("glossary", id);
