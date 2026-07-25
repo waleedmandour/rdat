@@ -61,11 +61,70 @@ export function WorkspaceShell() {
     // suggestions are ever generated. Previously this was only called
     // when the user visited the Models panel, which meant the editor
     // had no adapter until the user navigated there manually.
-    import("../lib/adapters").then(({ getActiveAdapter }) => {
-      getActiveAdapter().then((adapter) => {
-        console.log("[WorkspaceShell] Initial adapter detection:", adapter ? adapter.displayName : "null");
-      });
-    });
+    //
+    // ── Auto-recovery (Task 1 fix) ──
+    // The adapter factory memoizes its result — once it resolves to
+    // null (all retries exhausted), subsequent getActiveAdapter() calls
+    // return the cached null forever. This caused the "App Engine
+    // offline" bug: if Ollama was still starting up when the factory's
+    // initial retry budget ran out, the cache locked in null and the
+    // user had to click "Recheck" in the Models panel to clear it.
+    //
+    // Fix: when the factory resolves to null, reset the cache and
+    // re-attempt detection on a backoff schedule. Stop once an adapter
+    // is found. This auto-recovers without user intervention. Only
+    // runs in Tauri mode (PWA mode falls back to WebLLM/Gemini and
+    // has no daemon to wait for).
+    let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+    const detectWithAutoRecovery = async () => {
+      const { getActiveAdapter, resetAdapter, isTauriEnvironment } = await import("../lib/adapters");
+
+      // Only auto-retry in Tauri mode — PWA's WebGPU check is
+      // deterministic and won't suddenly start succeeding.
+      const shouldAutoRetry = isTauriEnvironment();
+
+      let attempt = 0;
+      while (!cancelled) {
+        attempt++;
+        const adapter = await getActiveAdapter();
+        if (cancelled) return;
+
+        if (adapter) {
+          console.log(`[WorkspaceShell] Adapter detected on attempt ${attempt}:`, adapter.displayName);
+          return;
+        }
+
+        if (!shouldAutoRetry) {
+          console.log("[WorkspaceShell] No adapter detected (PWA mode, no auto-retry).");
+          return;
+        }
+
+        // Factory resolved to null — Ollama wasn't ready. Reset the
+        // cache so the next getActiveAdapter() call re-runs detection
+        // from scratch instead of returning the cached null.
+        resetAdapter();
+
+        // Backoff: 10s between attempts. Long enough to give Ollama
+        // time to finish autostart, short enough that the user
+        // perceives recovery as automatic. Cap at 12 attempts (2 min
+        // total) so we don't poll forever if Ollama truly isn't
+        // installed.
+        if (attempt >= 12) {
+          console.warn(`[WorkspaceShell] Adapter detection gave up after ${attempt} attempts (2 min). User can still click Recheck in the Models panel.`);
+          return;
+        }
+
+        console.log(`[WorkspaceShell] Adapter not detected (attempt ${attempt}). Retrying in 10s...`);
+        await new Promise<void>((resolve) => {
+          retryTimer = setTimeout(() => resolve(), 10000);
+        });
+        if (cancelled) return;
+      }
+    };
+
+    detectWithAutoRecovery();
 
     // Check on mount whether we should show the onboarding modal
     if (shouldShowOllamaOnboarding()) {
@@ -79,8 +138,16 @@ export function WorkspaceShell() {
           setShowOnboarding(true);
         }
       }, 1500);
-      return () => clearTimeout(timer);
+      return () => {
+        cancelled = true;
+        if (retryTimer) clearTimeout(retryTimer);
+        clearTimeout(timer);
+      };
     }
+    return () => {
+      cancelled = true;
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   const handleOnboardingRetry = async (): Promise<boolean> => {

@@ -83,64 +83,112 @@ export function AiModelsView() {
   const [evaluatingSpecs, setEvaluatingSpecs] = useState<boolean>(true);
 
   // ─── Detect active adapter on mount ──────────────────────────────
-  // Safety: if getActiveAdapter() hasn't resolved in 20 seconds, force
-  // the loading state to clear. The factory can take up to ~15s when
-  // it does 3 retries with 2s delays each (for users with a saved model
-  // whose Ollama is slow to start). 20s is a generous safety margin.
+  // Safety: if getActiveAdapter() hasn't resolved in 45 seconds, force
+  // the loading state to clear. The factory can take up to ~38s when
+  // it does 3 retries with 2s delays each plus the per-attempt 8s
+  // timeout (for users with a saved model whose Ollama is slow to
+  // start). 45s is a generous safety margin that exceeds the factory's
+  // worst-case budget. Previously this was 20s, which preempted the
+  // factory's own retries and forced the user to click Recheck.
+  //
+  // Auto-recovery (Task 1 fix): if detection resolves to null (all
+  // factory retries exhausted), schedule a background re-detection
+  // every 10s until an adapter is found or the user navigates away.
+  // This mirrors the auto-recovery loop in WorkspaceShell so that
+  // visiting the Models panel during the failure window doesn't
+  // permanently show "No local engine available" — the banner
+  // disappears on its own once Ollama comes up.
   useEffect(() => {
     let cancelled = false;
+    let retryTimer: ReturnType<typeof setTimeout> | null = null;
     const safetyTimer = setTimeout(() => {
       if (!cancelled && adapterLoading) {
-        console.warn("[AiModelsView] Adapter detection timed out after 20s.");
+        console.warn("[AiModelsView] Adapter detection timed out after 45s.");
         setAdapter(null);
         setAdapterLoading(false);
         setDaemonHealthy(false);
       }
-    }, 20000);
+    }, 45000);
 
-    (async () => {
-      setAdapterLoading(true);
-      const activeAdapter = await getActiveAdapter();
-      if (cancelled) return;
-      clearTimeout(safetyTimer);
-      setAdapter(activeAdapter);
+    const detectWithAutoRecovery = async () => {
+      let attempt = 0;
+      while (!cancelled) {
+        attempt++;
+        const activeAdapter = await getActiveAdapter();
+        if (cancelled) return;
+        clearTimeout(safetyTimer);
+        setAdapter(activeAdapter);
 
-      if (activeAdapter) {
-        // Subscribe to adapter state changes
-        const unsubscribe = activeAdapter.onStateChange((state, progress, error) => {
-          if (cancelled) return;
-          setLoadingProgress(progress);
-          setAdapterError(error);
-          if (state === "ready") {
-            setLoadingModelId(null);
+        if (activeAdapter) {
+          // Subscribe to adapter state changes
+          const unsubscribe = activeAdapter.onStateChange((state, progress, error) => {
+            if (cancelled) return;
+            setLoadingProgress(progress);
+            setAdapterError(error);
+            if (state === "ready") {
+              setLoadingModelId(null);
+            }
+          });
+
+          // Load model list
+          try {
+            const modelList = await activeAdapter.listModels();
+            if (cancelled) return;
+            setModels(modelList);
+          } catch (e: any) {
+            console.warn("[AiModelsView] Failed to list models:", e);
           }
+
+          // Check daemon health (for Ollama)
+          try {
+            const healthy = await activeAdapter.isAvailable();
+            if (cancelled) return;
+            setDaemonHealthy(healthy);
+          } catch {
+            if (!cancelled) setDaemonHealthy(false);
+          }
+          setAdapterLoading(false);
+          return () => {
+            unsubscribe();
+          };
+        }
+
+        // Adapter is null — Ollama wasn't ready. Reset the cache so
+        // the next getActiveAdapter() call re-runs detection. Only
+        // auto-retry in Tauri mode (PWA's WebGPU check is deterministic).
+        if (!isTauriEnvironment()) {
+          setAdapterLoading(false);
+          return;
+        }
+        resetAdapter();
+
+        // Cap at 12 attempts (2 min) so we don't poll forever if
+        // Ollama truly isn't installed. The user can still click
+        // Recheck to re-trigger manually.
+        if (attempt >= 12) {
+          console.warn(`[AiModelsView] Adapter detection gave up after ${attempt} attempts. User can click Recheck to retry.`);
+          setAdapterLoading(false);
+          return;
+        }
+
+        console.log(`[AiModelsView] Adapter not detected (attempt ${attempt}). Retrying in 10s...`);
+        setAdapterLoading(false); // show the Recheck banner while we wait
+        await new Promise<void>((resolve) => {
+          retryTimer = setTimeout(() => resolve(), 10000);
         });
-
-        // Load model list
-        try {
-          const modelList = await activeAdapter.listModels();
-          if (cancelled) return;
-          setModels(modelList);
-        } catch (e: any) {
-          console.warn("[AiModelsView] Failed to list models:", e);
-        }
-
-        // Check daemon health (for Ollama)
-        try {
-          const healthy = await activeAdapter.isAvailable();
-          if (cancelled) return;
-          setDaemonHealthy(healthy);
-        } catch {
-          if (!cancelled) setDaemonHealthy(false);
-        }
-
-        return () => {
-          unsubscribe();
-        };
+        if (cancelled) return;
+        setAdapterLoading(true);
       }
-      setAdapterLoading(false);
-    })();
-    return () => { cancelled = true; clearTimeout(safetyTimer); };
+    };
+
+    setAdapterLoading(true);
+    detectWithAutoRecovery();
+
+    return () => {
+      cancelled = true;
+      clearTimeout(safetyTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, []);
 
   // ─── Hardware specs detection ────────────────────────────────────
