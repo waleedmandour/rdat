@@ -40,6 +40,7 @@ jobs:
         run: npx tsx scripts/test-phase3-regression.ts
 
       # v0.4.0 smoke tests: segmentation, ghost-gate, webllm-catalog.
+      # v0.4.1 smoke tests: gemini-model-config, doc-id, export.
       # Each exits non-zero on any failure.
       - name: Run segmentation test suite (v0.4.0)
         run: npx tsx scripts/test-segmentation.ts
@@ -49,6 +50,15 @@ jobs:
 
       - name: Run WebLLM catalog test suite (v0.4.0)
         run: npx tsx scripts/test-webllm-catalog.ts
+
+      - name: Run Gemini model config test suite (v0.4.1)
+        run: npx tsx scripts/test-gemini-model-config.ts
+
+      - name: Run doc-id test suite (v0.4.1)
+        run: npx tsx scripts/test-doc-id.ts
+
+      - name: Run export test suite (v0.4.1)
+        run: npx tsx scripts/test-export.ts
 
       - name: Vite production build
         run: npm run build

@@ -2,26 +2,26 @@
 
 **Professional Bidirectional English↔Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Version](https://img.shields.io/badge/Version-0.4.0-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.4.0)
+[![Version](https://img.shields.io/badge/Version-0.4.1-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.4.1)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
 [![PWA Ready](https://img.shields.io/badge/PWA-Optional-6366f1?logo=pwa&logoColor=white)](https://github.com/waleedmandour/rdat)
 [![CI](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml/badge.svg)](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml)
 
-### Download v0.4.0
+### Download v0.4.1
 
 | Platform | Artifact | Size |
 |----------|----------|------|
-| **Windows** (x64) | [RDAT.Copilot_0.4.0_x64-setup.exe](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_x64-setup.exe) | ~6.0 MB |
-| **macOS** (Apple Silicon) | [RDAT.Copilot_0.4.0_aarch64.dmg](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_aarch64.dmg) | ~10.2 MB |
-| **macOS** (Intel) | [RDAT.Copilot_0.4.0_x64.dmg](https://github.com/waleedmandour/rdat/releases/tag/v0.4.0) *(building)* | — |
-| **Linux** (.deb) | [RDAT.Copilot_0.4.0_amd64.deb](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_amd64.deb) | ~6.9 MB |
-| **Linux** (.rpm) | [RDAT.Copilot-0.4.0-1.x86_64.rpm](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot-0.4.0-1.x86_64.rpm) | ~6.9 MB |
-| **Linux** (.AppImage) | [RDAT.Copilot_0.4.0_amd64.AppImage](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_amd64.AppImage) | ~83.4 MB |
-| **PWA** (browser) | [rdat-v0.4.0-pwa.zip](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/rdat-v0.4.0-pwa.zip) | ~4.1 MB |
+| **Windows** (x64) | [RDAT.Copilot_0.4.1_x64-setup.exe](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_x64-setup.exe) | ~6 MB |
+| **macOS** (Apple Silicon) | [RDAT.Copilot_0.4.1_aarch64.dmg](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_aarch64.dmg) | ~10 MB |
+| **macOS** (Intel) | [RDAT.Copilot_0.4.1_x64.dmg](https://github.com/waleedmandour/rdat/releases/tag/v0.4.1) | — |
+| **Linux** (.deb) | [RDAT.Copilot_0.4.1_amd64.deb](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_amd64.deb) | ~7 MB |
+| **Linux** (.rpm) | [RDAT.Copilot-0.4.1-1.x86_64.rpm](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot-0.4.1-1.x86_64.rpm) | ~7 MB |
+| **Linux** (.AppImage) | [RDAT.Copilot_0.4.1_amd64.AppImage](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_amd64.AppImage) | ~84 MB |
+| **PWA** (browser) | [rdat-v0.4.1-pwa.zip](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/rdat-v0.4.1-pwa.zip) | ~4 MB |
 
-> v0.4.0 is a **pre-release**. See [What's New in v0.4.0](#whats-new-in-v040) below.
+> v0.4.1 is a **pre-release**. See [What's New in v0.4.1](#whats-new-in-v041) below.
 
 ---
 
@@ -177,6 +177,46 @@ Three translation pipeline modes are available, selectable via the Models panel:
 ### Translation Direction
 
 A direction toggle at the top of the editor lets you switch between **EN to AR** (English to Arabic, default) and **AR to EN** (Arabic to English). The direction is stored in the workspace state and persists across sessions.
+
+---
+
+## What's New in v0.4.1
+
+**Released 2026-10-03** — [Pre-release](https://github.com/waleedmandour/rdat/releases/tag/v0.4.1). Four resilience fixes addressing near-term production risks identified after v0.4.0. All gates green (lint clean, 356/356 tests pass, 0 cargo-audit vulnerabilities, vite build OK).
+
+### Gemini 3.8 Flash upgrade + configurable model ID + model-retired error
+
+The Gemini model ID was hardcoded as `gemini-2.5-flash` in 7 places. Google's deprecations page shows "No shutdown date announced" for 2.5-flash as of 2026-10-03, but Google's own note says listed dates are "the earliest possible dates" and community reports show pre-announcement shutdowns have happened. v0.4.1 upgrades the default to **`gemini-3.8-flash`** (the latest stable Flash model — note: "Gemini 4.0" does not exist yet) and makes the model ID user-configurable in the API Keys panel (persisted to localStorage). The Vercel serverless functions respect a `GEMINI_MODEL` env var. A new `ModelRetiredError` surfaces a specific actionable message ("Open API Keys and switch to a current model") instead of a generic 404 fatal error when the API returns 404/503 with a retirement message body.
+
+### Document entity (docId) — no more cross-document overwrites
+
+Segment ids were positional (`{sourceLang}-{targetLang}-{idx}`) with no document identity. Confirming segment N in document B **overwrote** document A's saved translation in IndexedDB. v0.4.1 adds a document entity: every import generates a `docId` (`crypto.randomUUID()`), the segment id becomes `{docId}:{sourceLang}-{targetLang}-{idx}`, and hydration + clear-text are scoped by `docId`. DB v4→v5 additive migration (adds `docId` index + `documents` store, no drop). Legacy v4 entries without `docId` are not attached (conservative). Forward-compatible with the planned document-manager UI.
+
+### Export + persistence — DOCX, JSON backup/restore, persistent storage
+
+Previously the only export was a plain TXT file; IndexedDB was the only copy of confirmed segments + glossary + TM, and browsers can evict it. v0.4.1 adds:
+- **DOCX export** — source/target segment pairs as a .docx (right-aligned Arabic, left-aligned English). Uses the `docx` library (new dependency, ~1.2 MB).
+- **JSON backup/restore** — full dump of segments + glossary + documents to a single JSON file; restore re-inserts all entries (upsert by id). The recovery path for browser data eviction.
+- **`navigator.storage.persist()` on boot** — asks the browser not to evict IndexedDB under storage pressure (best-effort, PWA mode only).
+- XLIFF/TMX (industry-standard interchange) are a documented follow-up.
+
+### ARASEG benchmark — 70.62% F1
+
+The v0.4.0 segmenter had no F1 benchmark. v0.4.1 benchmarks it against [ARASEG](https://github.com/NAMAA-ORG/NAMAA-Community-AraSeg-2026) (NAMAA-Community, 2026, developed by MBZUAI and NYU Abu Dhabi) — the AraSeg 2026 Shared Task PA (Punctuated, paragraph-Aware) dev split, 222 documents, 163,609 tokens:
+
+| Method | PA F1 (dev) |
+|--------|------:|
+| Generic rules (Punkt/PySBD/spaCy/Ersatz) | 63–67% |
+| SaT (multilingual neural) | 66.9% |
+| **RDAT custom Arabic segmenter** | **70.62%** |
+| Gemini 3.1 Pro (prompted) | 76.8% |
+| Dependency-parser model | 94.7% |
+| Fine-tuned CAMeLBERT | 95.6% |
+| NAMAA-Community ensemble (PA, blind) | 94.4% |
+
+The RDAT segmenter (precision 87.07%, recall 59.40%) **beats the generic-rules baseline and the SaT neural baseline**. It's below Gemini 3.1 Pro and the fine-tuned models — the expected cost of the rule-based approach (no model download, instant cold-start, deterministic, privacy-first). The high-precision / lower-recall pattern matches the ARASEG paper's finding that 39% of Arabic boundaries have no punctuation, capping rule-based recall. Full results + honest limitations: [`docs/araseg-benchmark-results.md`](docs/araseg-benchmark-results.md).
+
+> **Attribution:** The ARASEG benchmark is the work of the NAMAA-Community (MBZUAI and NYU Abu Dhabi) for the AraSeg 2026 Shared Task. Dataset: [MBZUAI/AraSeg-2026-Shared-Task-PA](https://huggingface.co/datasets/MBZUAI/AraSeg-2026-Shared-Task-PA) (public). Paper + code: [NAMAA-ORG/NAMAA-Community-AraSeg-2026](https://github.com/NAMAA-ORG/NAMAA-Community-AraSeg-2026).
 
 ---
 
