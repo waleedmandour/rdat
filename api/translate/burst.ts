@@ -75,6 +75,8 @@ export default {
         contents: systemPrompt,
         config: {
           responseMimeType: "application/json",
+          // Fix 4 (v0.4.3): LOW thinking for ghost text (fast, simple).
+          thinkingConfig: { thinkingLevel: "LOW" as any },
         },
       });
 

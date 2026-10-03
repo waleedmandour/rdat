@@ -53,7 +53,9 @@ async function startServer() {
         model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
         contents: systemPrompt,
         config: {
-          responseMimeType: "application/json"
+          responseMimeType: "application/json",
+          // Fix 4 (v0.4.3): LOW thinking for ghost text.
+          thinkingConfig: { thinkingLevel: "LOW" as any }
         }
       });
 
@@ -84,6 +86,8 @@ async function startServer() {
       const response = await ai.models.generateContent({
         model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
         contents: systemPrompt,
+        // Fix 4 (v0.4.3): LOW thinking for ghost text.
+        config: { thinkingConfig: { thinkingLevel: "LOW" as any } },
       });
 
       const translation = (response.text || "").trim();
