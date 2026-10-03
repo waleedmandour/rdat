@@ -87,7 +87,7 @@ async function getInvoke(): Promise<(cmd: string, args?: Record<string, unknown>
 // (embedding, vision-only, code-only) from the "user-pulled" list so the
 // panel stays focused on translation-relevant models.
 
-const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
+export const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
   {
     id: "gemma4:e2b",
     name: "Gemma 4 E2B (Recommended Starter)",
@@ -103,10 +103,24 @@ const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
     family: "Gemma",
   },
   {
-    id: "gemma4:12b-qat",
+    id: "gemma4:e2b-it-qat",
+    name: "Gemma 4 E2B QAT (Quantization-Aware, Higher Quality)",
+    parameters: "2B (QAT)",
+    size: "~1.6 GB",
+    family: "Gemma",
+  },
+  {
+    id: "gemma4:e4b-it-qat",
+    name: "Gemma 4 E4B QAT (Quantization-Aware, Higher Quality)",
+    parameters: "4B (QAT)",
+    size: "~3.2 GB",
+    family: "Gemma",
+  },
+  {
+    id: "gemma4:12b-it-qat",
     name: "Gemma 4 12B QAT (Highest Quality, Quantization-Aware)",
     parameters: "12B (QAT)",
-    size: "~7.0 GB",
+    size: "~7.2 GB",
     family: "Gemma",
   },
   {
