@@ -194,8 +194,11 @@ export function SourceEditor({
   return (
     <div className="h-full flex flex-col bg-background font-sans select-none border-b border-border md:border-b-0 md:border-r">
       {/* Editor Panel Header */}
-      <div className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4">
-        <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+      <div
+        className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4"
+        style={{ fontSize: "var(--instruction-font-size, 10px)" }}
+      >
+        <span className="font-bold uppercase tracking-widest text-slate-500">
           {isSourceArabic
             ? (isRTL ? "مستند المصدر — عربي" : "Source Text — Arabic")
             : (isRTL ? "مستند المصدر — إنكليزي" : "Source Text — English")}
@@ -204,7 +207,7 @@ export function SourceEditor({
           <button
             onClick={() => setIsImportOpen(!isImportOpen)}
             className={cn(
-              "p-1 px-2 rounded font-black text-[9px] uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all",
+              "p-1 px-2 rounded font-black uppercase tracking-wider flex items-center gap-1 cursor-pointer transition-all",
               isImportOpen
                 ? "bg-rose-500/10 text-rose-500 hover:bg-rose-500/20"
                 : "bg-primary/10 text-primary hover:bg-primary/20"
@@ -213,14 +216,17 @@ export function SourceEditor({
             {isImportOpen ? <X className="w-3 h-3" /> : <Upload className="w-3 h-3" />}
             <span>{isImportOpen ? (isRTL ? "إلغاء لسطح المكتب" : "Cancel") : (isRTL ? "استيراد ملف" : "Import Document")}</span>
           </button>
-          <span className="font-mono text-[10px] text-slate-500">{isSourceArabic ? "AR-SA" : "EN-US"}</span>
+          <span className="font-mono text-slate-500">{isSourceArabic ? "AR-SA" : "EN-US"}</span>
         </div>
       </div>
 
       {/* Inline Section for Source document importation */}
       {isImportOpen && (
-        <div className="p-4 bg-surface-hover/35 dark:bg-white/[0.02] border-b border-border flex flex-col gap-3 select-text animate-fade-in">
-          <div className="text-[10.5px] font-bold text-muted-foreground">
+        <div
+          className="p-4 bg-surface-hover/35 dark:bg-white/[0.02] border-b border-border flex flex-col gap-3 select-text animate-fade-in"
+          style={{ fontSize: "var(--instruction-font-size, 10px)" }}
+        >
+          <div className="font-bold text-muted-foreground">
             {isRTL ? "احمل ملفك النصي أو قم بلصق المحتوى أدناه:" : "Upload your translation project source file or paste text below:"}
           </div>
           

@@ -60,6 +60,9 @@ jobs:
       - name: Run export test suite (v0.4.1)
         run: npx tsx scripts/test-export.ts
 
+      - name: Run Ollama PWA test suite (v0.4.2)
+        run: npx tsx scripts/test-ollama-pwa.ts
+
       - name: Vite production build
         run: npm run build
 

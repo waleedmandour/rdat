@@ -55,6 +55,8 @@ jobs:
       - run: npx tsx scripts/test-gemini-model-config.ts
       - run: npx tsx scripts/test-doc-id.ts
       - run: npx tsx scripts/test-export.ts
+      # v0.4.2 smoke tests
+      - run: npx tsx scripts/test-ollama-pwa.ts
       - run: npm run build
 
   # ─────────────────────────────────────────────────────────────────

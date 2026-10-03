@@ -81,6 +81,11 @@ async function getInvoke(): Promise<(cmd: string, args?: Record<string, unknown>
 // fits the project's 1-2B parameter target.
 // Even though Ollama can run any model the user has pulled, we ship a
 // recommended catalog so the AiModelsView can offer one-click install.
+//
+// v0.4.2: added gemma4:12b-qat (Quantization-Aware Training variant —
+// smaller footprint, same quality). Filtered out non-translation models
+// (embedding, vision-only, code-only) from the "user-pulled" list so the
+// panel stays focused on translation-relevant models.
 
 const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
   {
@@ -95,6 +100,13 @@ const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
     name: "Gemma 4 E4B (Higher Quality)",
     parameters: "4B (Effective)",
     size: "~3.0 GB",
+    family: "Gemma",
+  },
+  {
+    id: "gemma4:12b-qat",
+    name: "Gemma 4 12B QAT (Highest Quality, Quantization-Aware)",
+    parameters: "12B (QAT)",
+    size: "~7.0 GB",
     family: "Gemma",
   },
   {
@@ -133,6 +145,32 @@ const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
     family: "Llama",
   },
 ];
+
+/**
+ * Models that are NOT useful for translation and should be filtered out
+ * of the "user-pulled" list (so the panel stays focused). The user can
+ * still pull them via Ollama directly; we just don't show them in RDAT.
+ *
+ * Matches by prefix so e.g. "nomic-embed" catches all variants.
+ */
+const HIDDEN_MODEL_PREFIXES = [
+  "nomic-embed",    // embedding model
+  "mxbai-embed",    // embedding model
+  "snowflake-arctic-embed", // embedding model
+  "all-minilm",     // embedding model
+  "llava",          // vision model
+  "moondream",      // vision model
+  "minicpm-v",      // vision model
+  "qwen2.5-coder",  // code-only
+  "codellama",      // code-only
+  "deepseek-coder", // code-only
+  "starcoder",      // code-only
+];
+
+function isHiddenModel(modelTag: string): boolean {
+  const lower = modelTag.toLowerCase();
+  return HIDDEN_MODEL_PREFIXES.some((p) => lower.startsWith(p));
+}
 
 /**
  * The default model to auto-select for new users after they pull it.
@@ -203,7 +241,18 @@ export class OllamaAdapter implements LLMAdapter {
    * diagnostics for the UI.
    */
   async isAvailable(): Promise<boolean> {
-    if (!isTauriEnvironment()) return false;
+    // v0.4.2: in PWA mode, try the HTTP backend (localhost:11434).
+    // This lets the PWA use a locally-installed Ollama daemon without
+    // Tauri. Requires OLLAMA_ORIGINS to be set on the user's Ollama.
+    if (!isTauriEnvironment()) {
+      const ok = await httpHealthCheck();
+      if (!ok) return false;
+      lastHealthDiagnostics = {
+        healthy: true,
+        attempts: [{ url: OLLAMA_HTTP_BASE, success: true, error: null }],
+      };
+      return true;
+    }
     try {
       const invoke = await getInvoke();
       const result = await invoke("ollama_health") as HealthDiagnostics;
@@ -288,23 +337,43 @@ export class OllamaAdapter implements LLMAdapter {
     setState("generating");
 
     try {
-      const invoke = await getInvoke();
-      console.log("[OllamaAdapter] translate() called", {
-        model: loadedModelId,
-        sourceText: sourceText.substring(0, 60),
-        targetPrefix: targetPrefix.substring(0, 60),
-        hasRag: !!ragEntries && ragEntries.length > 0,
-      });
+      let result: { candidates: string[]; error: string | null };
 
-      const result = await invoke("ollama_translate", {
-        req: {
+      if (isTauriEnvironment()) {
+        const invoke = await getInvoke();
+        console.log("[OllamaAdapter] translate() called (Tauri)", {
+          model: loadedModelId,
+          sourceText: sourceText.substring(0, 60),
+          targetPrefix: targetPrefix.substring(0, 60),
+          hasRag: !!ragEntries && ragEntries.length > 0,
+        });
+
+        result = await invoke("ollama_translate", {
+          req: {
+            model: loadedModelId,
+            systemPrompt,
+            userPrompt,
+            maxTokens,
+            temperature,
+          },
+        }) as { candidates: string[]; error: string | null };
+      } else {
+        // v0.4.2: PWA mode — use HTTP backend
+        console.log("[OllamaAdapter] translate() called (HTTP)", {
+          model: loadedModelId,
+          sourceText: sourceText.substring(0, 60),
+          targetPrefix: targetPrefix.substring(0, 60),
+          hasRag: !!ragEntries && ragEntries.length > 0,
+        });
+
+        result = await httpTranslate({
           model: loadedModelId,
           systemPrompt,
           userPrompt,
           maxTokens,
           temperature,
-        },
-      }) as { candidates: string[]; error: string | null };
+        });
+      }
 
       if (result.error) {
         setState("error", 0, result.error);
@@ -351,47 +420,70 @@ export class OllamaAdapter implements LLMAdapter {
   // ── Model Catalog ──
 
   async listModels(): Promise<ModelInfo[]> {
-    if (!isTauriEnvironment()) return [];
+    // v0.4.2: in PWA mode, use the HTTP backend.
+    let installed: Array<{ name: string; size: number; digest: string }> = [];
     try {
-      const invoke = await getInvoke();
-      const installed = (await invoke("ollama_list_models")) as Array<{
-        name: string;
-        size: number;
-        digest: string;
-      }>;
-
-      // Merge installed models with the recommended catalog so the UI
-      // shows both "what you have" and "what you can install".
-      const installedSet = new Set(installed.map((m) => m.name));
-      const catalog: ModelInfo[] = RECOMMENDED_OLLAMA_MODELS.map((m) => ({
-        ...m,
-        isCached: installedSet.has(m.id),
-      }));
-
-      // Add any installed models not in the recommended catalog (user-pulled)
-      for (const m of installed) {
-        if (!catalog.find((c) => c.id === m.name)) {
-          catalog.push({
-            id: m.name,
-            name: m.name,
-            parameters: parseParamsFromTag(m.name),
-            size: formatBytes(m.size),
-            family: parseFamilyFromTag(m.name),
-            isCached: true,
-          });
-        }
+      if (isTauriEnvironment()) {
+        const invoke = await getInvoke();
+        installed = (await invoke("ollama_list_models")) as Array<{
+          name: string;
+          size: number;
+          digest: string;
+        }>;
+      } else {
+        installed = await httpListModels();
       }
-
-      return catalog;
     } catch (e: any) {
       console.error("[OllamaAdapter] listModels failed:", e);
       return [];
     }
+
+    // v0.4.2: filter out non-translation models (embedding, vision, code)
+    // so the panel stays focused. The user can still pull them via
+    // Ollama directly; we just don't show them in RDAT.
+    const visibleInstalled = installed.filter((m) => !isHiddenModel(m.name));
+
+    // Merge installed models with the recommended catalog so the UI
+    // shows both "what you have" and "what you can install".
+    const installedSet = new Set(visibleInstalled.map((m) => m.name));
+    const catalog: ModelInfo[] = RECOMMENDED_OLLAMA_MODELS.map((m) => ({
+      ...m,
+      isCached: installedSet.has(m.id),
+    }));
+
+    // Add any installed models not in the recommended catalog (user-pulled)
+    for (const m of visibleInstalled) {
+      if (!catalog.find((c) => c.id === m.name)) {
+        catalog.push({
+          id: m.name,
+          name: m.name,
+          parameters: parseParamsFromTag(m.name),
+          size: formatBytes(m.size),
+          family: parseFamilyFromTag(m.name),
+          isCached: true,
+        });
+      }
+    }
+
+    return catalog;
   }
 
   async pullModel(modelId: string, onProgress?: (progress: number) => void): Promise<void> {
+    // v0.4.2: in PWA mode, use the HTTP backend.
     if (!isTauriEnvironment()) {
-      throw new Error("Cannot pull models outside Tauri environment.");
+      setState("loading", 0, null);
+      try {
+        await httpPullModel(modelId, (pct) => {
+          setState("loading", pct, null);
+          onProgress?.(pct);
+        });
+        setState("ready", 100, null);
+      } catch (e: any) {
+        const msg = e?.message || String(e);
+        setState("error", 0, msg);
+        throw e;
+      }
+      return;
     }
 
     setState("loading", 0, null);
@@ -431,8 +523,14 @@ export class OllamaAdapter implements LLMAdapter {
   }
 
   async removeModel(modelId: string): Promise<void> {
+    // v0.4.2: in PWA mode, use the HTTP backend.
     if (!isTauriEnvironment()) {
-      throw new Error("Cannot remove models outside Tauri environment.");
+      await httpRemoveModel(modelId);
+      if (loadedModelId === modelId) {
+        loadedModelId = null;
+        setState("idle", 0, null);
+      }
+      return;
     }
     const invoke = await getInvoke();
     await invoke("ollama_remove_model", { model: modelId });
@@ -488,6 +586,169 @@ function formatBytes(bytes: number): string {
   if (gb >= 1) return `~${gb.toFixed(1)} GB`;
   const mb = bytes / (1024 * 1024);
   return `~${mb.toFixed(0)} MB`;
+}
+
+// ─── HTTP backend for PWA mode (v0.4.2) ────────────────────────────
+// When not running in Tauri (PWA/browser mode), the OllamaAdapter can
+// still reach a local Ollama daemon via its REST API at
+// http://localhost:11434. This requires the user to set
+// OLLAMA_ORIGINS=* (or the PWA's origin) so Ollama accepts the
+// cross-origin request. Documented in the README + AiModelsView.
+//
+// The HTTP backend mirrors the Tauri Rust commands:
+//   - GET  /api/tags        → list installed models
+//   - POST /api/pull        → pull a model (streaming NDJSON progress)
+//   - POST /api/generate    → inference
+//   - DELETE /api/delete    → remove a model
+//
+// All requests use a 60-second timeout (Ollama generate can be slow on
+// first load). Pull uses a streaming reader for progress updates.
+
+const OLLAMA_HTTP_BASE = "http://localhost:11434";
+const OLLAMA_HTTP_TIMEOUT_MS = 60_000;
+
+interface OllamaTag {
+  name: string;
+  size: number;
+  digest: string;
+}
+
+async function httpListModels(): Promise<OllamaTag[]> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OLLAMA_HTTP_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`${OLLAMA_HTTP_BASE}/api/tags`, {
+      signal: controller.signal,
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const data = await resp.json();
+    return (data.models || []).map((m: any) => ({
+      name: m.name,
+      size: m.size || 0,
+      digest: m.digest || "",
+    }));
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function httpHealthCheck(): Promise<boolean> {
+  // Quick HEAD/GET to /api/tags with a short timeout. If it responds,
+  // Ollama is running + CORS is configured.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 3000);
+  try {
+    const resp = await fetch(`${OLLAMA_HTTP_BASE}/api/tags`, {
+      signal: controller.signal,
+    });
+    return resp.ok;
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function httpPullModel(
+  modelId: string,
+  onProgress?: (progress: number) => void
+): Promise<void> {
+  // /api/pull streams NDJSON: {"status":"pulling manifest"}, then
+  // {"status":"downloading","digest":"...","total":...,"completed":...}
+  // We read the stream + compute percent from completed/total.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 600_000); // 10 min for large models
+  try {
+    const resp = await fetch(`${OLLAMA_HTTP_BASE}/api/pull`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: modelId, stream: true }),
+      signal: controller.signal,
+    });
+    if (!resp.ok || !resp.body) throw new Error(`HTTP ${resp.status}`);
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop() || ""; // keep incomplete line
+      for (const line of lines) {
+        if (!line.trim()) continue;
+        try {
+          const evt = JSON.parse(line);
+          if (evt.status === "downloading" && evt.total) {
+            const pct = Math.round((evt.completed / evt.total) * 100);
+            onProgress?.(pct);
+          } else if (evt.status === "success") {
+            onProgress?.(100);
+          }
+        } catch {
+          // ignore parse errors on partial lines
+        }
+      }
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function httpTranslate(req: {
+  model: string;
+  systemPrompt: string;
+  userPrompt: string;
+  maxTokens: number;
+  temperature: number;
+}): Promise<{ candidates: string[]; error: string | null }> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OLLAMA_HTTP_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`${OLLAMA_HTTP_BASE}/api/generate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: req.model,
+        system: req.systemPrompt,
+        prompt: req.userPrompt,
+        stream: false,
+        options: {
+          num_predict: req.maxTokens,
+          temperature: req.temperature,
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) {
+      const text = await resp.text().catch(() => "");
+      return { candidates: [], error: `Ollama HTTP ${resp.status}: ${text.slice(0, 200)}` };
+    }
+    const data = await resp.json();
+    const candidate = (data.response || "").trim();
+    return { candidates: candidate ? [candidate] : [], error: null };
+  } catch (e: any) {
+    return { candidates: [], error: e?.message || String(e) };
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+async function httpRemoveModel(modelId: string): Promise<void> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), OLLAMA_HTTP_TIMEOUT_MS);
+  try {
+    const resp = await fetch(`${OLLAMA_HTTP_BASE}/api/delete`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: modelId }),
+      signal: controller.signal,
+    });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export default OllamaAdapter;

@@ -793,7 +793,11 @@ export function TargetEditor({
       )}
 
       {isActive && (
-        <div className="flex flex-wrap items-center justify-between pt-3 border-t dark:border-white/5 border-border/40 text-[10px] text-muted-foreground leading-loose" dir={isRTL ? "rtl" : "ltr"}>
+        <div
+          className="flex flex-wrap items-center justify-between pt-3 border-t dark:border-white/5 border-border/40 text-muted-foreground leading-loose"
+          style={{ fontSize: "var(--instruction-font-size, 10px)" }}
+          dir={isRTL ? "rtl" : "ltr"}
+        >
           
           {(gateOpen && suggestionCandidates.length > 0) ? (
             <div className="flex items-center gap-1.5 text-primary">
