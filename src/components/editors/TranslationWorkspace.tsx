@@ -8,7 +8,7 @@ import { putToStore, getAllofStore, deleteFromStore } from "../../lib/dual-stora
 import { SourceEditor } from "./SourceEditor";
 import { TargetEditor } from "./TargetEditor";
 import { useGemini } from "../../hooks/useGemini";
-import { SegmentEntry, GlossaryEntry, TutorAnalysis } from "../../types";
+import { SegmentEntry, GlossaryEntry, TutorAnalysis, DocumentMeta } from "../../types";
 import { segment } from "../../lib/segmentation";
 import { clearPrefetchCache } from "../../lib/local-llm-engine";
 import {
@@ -24,6 +24,9 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  FileText,
+  Save,
+  Upload,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -438,6 +441,100 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     URL.revokeObjectURL(url);
   };
 
+  // ─── DOCX export (Issue 3, v0.4.1) ──────────────────────────────
+  // Exports the source/target segment pairs as a .docx file. The
+  // target paragraphs are right-aligned for Arabic (RTL) and left-
+  // aligned for English (LTR). Uses the `docx` library.
+  const handleExportDocx = async () => {
+    if (sentences.length === 0) {
+      showToast(isRTL ? "لا يوجد نص للتصدير" : "Nothing to export", "warning");
+      return;
+    }
+    try {
+      const { buildDocxBlob } = await import("../../lib/export-import");
+      const docName = useWorkspaceStore.getState().currentDocName || "RDAT_Translation";
+      const blob = await buildDocxBlob({
+        title: docName,
+        sourceLangLabel: isArToEn ? "Arabic" : "English",
+        targetLangLabel: isArToEn ? "English" : "Arabic",
+        segments: sentences.map((s, i) => ({ source: s, target: targetTexts[i] || "" })),
+        isTargetRTL: !isArToEn, // target is Arabic for EN→AR
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${docName.replace(/[^\w\u0600-\u06FF-]/g, "_")}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast(isRTL ? "تم تصدير ملف Word" : "DOCX exported", "success");
+    } catch (e: any) {
+      console.error("[Export DOCX] failed:", e);
+      showToast(isRTL ? `فشل تصدير Word: ${e.message}` : `DOCX export failed: ${e.message}`, "error");
+    }
+  };
+
+  // ─── JSON backup / restore (Issue 3, v0.4.1) ────────────────────
+  // Full dump of segments + glossary + documents to a single JSON
+  // file. Restore re-inserts all entries (upsert by id). This is the
+  // only way to recover from a browser data eviction.
+  const handleExportJsonBackup = async () => {
+    try {
+      const { buildJsonBackup, serializeJsonBackup } = await import("../../lib/export-import");
+      const pkg = await import("../../../package.json");
+      const [segments, glossary, documents] = await Promise.all([
+        getAllofStore<SegmentEntry>("segments"),
+        getAllofStore<GlossaryEntry>("glossary"),
+        getAllofStore<DocumentMeta>("documents"),
+      ]);
+      const backup = buildJsonBackup(segments, glossary, documents, pkg.version);
+      const json = serializeJsonBackup(backup);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `RDAT_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast(
+        isRTL
+          ? `تم تصدير النسخة الاحتياطية (${segments.length} مقطع، ${glossary.length} مصطلح)`
+          : `Backup exported (${segments.length} segments, ${glossary.length} glossary entries)`,
+        "success"
+      );
+    } catch (e: any) {
+      console.error("[Export JSON] failed:", e);
+      showToast(isRTL ? `فشل تصدير النسخة الاحتياطية: ${e.message}` : `Backup export failed: ${e.message}`, "error");
+    }
+  };
+
+  const handleImportJsonBackup = async (file: File) => {
+    try {
+      const text = await file.text();
+      const { parseJsonBackup } = await import("../../lib/export-import");
+      const backup = parseJsonBackup(text);
+      // Re-insert all entries (upsert by id). putBatchToStore handles
+      // the bulk insert.
+      const { putBatchToStore } = await import("../../lib/dual-storage");
+      if (backup.segments.length > 0) await putBatchToStore("segments", backup.segments);
+      if (backup.glossary.length > 0) await putBatchToStore("glossary", backup.glossary);
+      if (backup.documents.length > 0) await putBatchToStore("documents", backup.documents);
+      await refreshCounts();
+      // Re-hydrate the current document if it was in the backup
+      initialLoadDoneRef.current = false;
+      prevSentencesLenRef.current = -1;
+      showToast(
+        isRTL
+          ? `تم استيراد النسخة الاحتياطية (${backup.segments.length} مقطع، ${backup.glossary.length} مصطلح)`
+          : `Backup restored (${backup.segments.length} segments, ${backup.glossary.length} glossary entries)`,
+        "success"
+      );
+    } catch (e: any) {
+      console.error("[Import JSON] failed:", e);
+      showToast(isRTL ? `فشل استيراد النسخة الاحتياطية: ${e.message}` : `Backup restore failed: ${e.message}`, "error");
+    }
+  };
+  const jsonBackupInputRef = useRef<HTMLInputElement>(null);
+
   // ─── Clear text (Task 1b, v0.4.0) ────────────────────────────────
   // Clears: sourceText, targetTexts, currentSegmentIndex, segmentation
   // state, manual split/merge overrides. Aborts in-flight LLM/Gemini
@@ -731,10 +828,53 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
             <button
               onClick={handleExportArabicTranslation}
               className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "تصدير نصي" : "Export as TXT"}
             >
               <Download className="w-3.5 h-3.5" />
               <span>{isRTL ? "تصدير الملف" : "Export TXT"}</span>
             </button>
+
+            {/* Issue 3 (v0.4.1): DOCX export + JSON backup/restore.
+                The only export before was TXT; IndexedDB was the only
+                copy. Now users can export to Word, back up everything,
+                and restore after a data eviction. */}
+            <button
+              onClick={handleExportDocx}
+              className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "تصدير ملف Word" : "Export as DOCX (Word)"}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isRTL ? "Word" : "DOCX"}</span>
+            </button>
+
+            <button
+              onClick={handleExportJsonBackup}
+              className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "نسخة احتياطية كاملة (JSON)" : "Full backup (JSON)"}
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isRTL ? "نسخة احتياطية" : "Backup"}</span>
+            </button>
+
+            <button
+              onClick={() => jsonBackupInputRef.current?.click()}
+              className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "استيراد نسخة احتياطية (JSON)" : "Restore from backup (JSON)"}
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isRTL ? "استعادة" : "Restore"}</span>
+            </button>
+            <input
+              type="file"
+              ref={jsonBackupInputRef}
+              accept=".json"
+              className="hidden"
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0) handleImportJsonBackup(files[0]);
+                e.target.value = "";
+              }}
+            />
           </div>
         </div>
 
