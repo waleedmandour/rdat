@@ -8,6 +8,8 @@ import { SourceEditor } from "./SourceEditor";
 import { TargetEditor } from "./TargetEditor";
 import { useGemini } from "../../hooks/useGemini";
 import { SegmentEntry, GlossaryEntry, TutorAnalysis } from "../../types";
+import { segment } from "../../lib/segmentation";
+import { clearPrefetchCache } from "../../lib/local-llm-engine";
 import {
   CheckCircle2,
   Sparkles,
@@ -15,7 +17,8 @@ import {
   Check,
   Search,
   BookMarked,
-  GraduationCap
+  GraduationCap,
+  Type,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -42,19 +45,33 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     setHighlightedSegmentIndex,
     direction,
     setDirection,
+    granularity,
+    setGranularity,
+    manualBreaks,
+    manualJoins,
   } = useWorkspaceStore();
 
   const isArToEn = direction === "ar-en";
 
   const { refreshCounts } = useDualStorage();
 
-  // Split original English text into logical segment lines
-  const sentences = useMemo(() => {
-    return sourceText
-      .split(/\n+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-  }, [sourceText]);
+  // ─── Paragraph-faithful CAT-grade segmentation ───────────────────
+  // Replaces the old `sourceText.split(/\n+/)` line-only splitter with
+  // the SRX-style segmenter at src/lib/segmentation/. Segments are
+  // grouped by paragraph (hard boundaries), split into sentences
+  // within paragraphs, and carry a sourceHash for safe persistence.
+  // Re-segmentation happens ONLY when sourceText / granularity /
+  // direction / manual overrides change — never on target keystrokes.
+  const segmentation = useMemo(() => {
+    return segment(sourceText, {
+      granularity,
+      manualBreaks,
+      manualJoins,
+    });
+  }, [sourceText, granularity, manualBreaks, manualJoins]);
+
+  const sentences = useMemo(() => segmentation.segments.map((s) => s.text), [segmentation]);
+  const segmentSourceHashes = useMemo(() => segmentation.segments.map((s) => s.sourceHash), [segmentation]);
 
   // Track which segment indices have been confirmed/saved
   const [confirmedIndices, setConfirmedIndices] = useState<Record<number, boolean>>({});
@@ -94,14 +111,35 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       const confirmedMap: Record<number, boolean> = {};
       const dbTexts: Record<number, string> = {};
 
+      // ─── Stale-attachment guard (Task 2, v0.4.0) ────────────────
+      // Previously this hydrated ANY segment whose segment_index was
+      // in range, regardless of language pair or source text — so an
+      // AR→EN segment at index 3 could hydrate into an EN→AR session
+      // at index 3 if the source happened to be the same length. Now
+      // we require:
+      //   1. source_lang + target_lang match the active direction
+      //   2. sourceHash matches the current segment's hash (OR the
+      //      entry has no sourceHash, in which case we conservatively
+      //      DO NOT attach — the user re-translates)
+      const sourceLang = isArToEn ? "ar" : "en";
+      const targetLang = isArToEn ? "en" : "ar";
+
       for (const entry of dbEntries) {
         if (
           entry.segment_index !== undefined &&
-          entry.segment_index < currentSentencesLen
+          entry.segment_index < currentSentencesLen &&
+          entry.source_lang === sourceLang &&
+          entry.target_lang === targetLang
         ) {
-          confirmedMap[entry.segment_index] = entry.status === "confirmed";
-          if (entry.target) {
-            dbTexts[entry.segment_index] = entry.target;
+          // sourceHash check: attach only if the hash matches the
+          // current segment's hash. Legacy entries (no sourceHash)
+          // are NOT attached (conservative — avoids stale attach).
+          const currentHash = segmentSourceHashes[entry.segment_index];
+          if (currentHash && entry.sourceHash && entry.sourceHash === currentHash) {
+            confirmedMap[entry.segment_index] = entry.status === "confirmed";
+            if (entry.target) {
+              dbTexts[entry.segment_index] = entry.target;
+            }
           }
         }
       }
@@ -124,7 +162,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     } catch (e) {
       console.warn("[Workspace] Failed to pre-populate from DB:", e);
     }
-  }, [setTargetTexts]);
+  }, [setTargetTexts, isArToEn, segmentSourceHashes]);
 
   // Load glossary entries — only depends on stable functions
   const loadGlossaryEntries = useCallback(async () => {
@@ -145,6 +183,25 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       loadGlossaryEntries();
     }
   }, [sentencesLen, loadConfirmedSegments, loadGlossaryEntries]);
+
+  // ─── Direction-switch hygiene (cross-cutting, Task 2 + Task 3) ────
+  // On any direction switch: abort in-flight requests (handled in
+  // TargetEditor via its `direction` dep), clear the prefetch/ghost
+  // cache so a stale suggestion from the other direction cannot leak,
+  // and re-run hydration against the new language pair. The cache is
+  // keyed by sourceText only today (see local-llm-engine.ts), so a
+  // direction flip would otherwise return the wrong-language suggestion.
+  const prevDirectionRef = useRef(direction);
+  useEffect(() => {
+    if (prevDirectionRef.current !== direction) {
+      prevDirectionRef.current = direction;
+      clearPrefetchCache();
+      // Re-hydrate against the new language pair. Reset the load-done
+      // flag so loadConfirmedSegments runs again.
+      initialLoadDoneRef.current = false;
+      prevSentencesLenRef.current = -1;
+    }
+  }, [direction]);
 
   // Run Translation Tutor and parse feedback
   const handleRunTutor = async () => {
@@ -265,7 +322,11 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
         target_lang: targetLang,
         status: "confirmed",
         score: 1.0,
-        segment_index: idx
+        segment_index: idx,
+        // Task 2 (v0.4.0): persist sourceHash so future hydration can
+        // refuse to re-attach this translation to different source
+        // text. See src/lib/segmentation/types.ts fnv1aHex.
+        sourceHash: segmentSourceHashes[idx],
       };
 
       await putToStore("segments", newEntry);
@@ -398,6 +459,39 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
         >
           AR → EN
         </button>
+
+        {/* Granularity toggle: Sentence (default) / Paragraph.
+            Trados-style: within paragraphs, split into sentences; or
+            treat each paragraph as one segment. */}
+        <div className="ms-auto flex items-center gap-1">
+          <Type className="w-3 h-3 text-muted-foreground" />
+          <button
+            onClick={() => setGranularity("sentence")}
+            title={isRTL ? "تجزئة على مستوى الجملة" : "Sentence-level segmentation"}
+            aria-label={isRTL ? "تجزئة على مستوى الجملة" : "Sentence-level segmentation"}
+            className={cn(
+              "px-2 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer",
+              granularity === "sentence"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {isRTL ? "جملة" : "Sentence"}
+          </button>
+          <button
+            onClick={() => setGranularity("paragraph")}
+            title={isRTL ? "تجزئة على مستوى الفقرة" : "Paragraph-level segmentation"}
+            aria-label={isRTL ? "تجزئة على مستوى الفقرة" : "Paragraph-level segmentation"}
+            className={cn(
+              "px-2 py-0.5 rounded text-[9px] font-bold transition-all cursor-pointer",
+              granularity === "paragraph"
+                ? "bg-primary/20 text-primary"
+                : "text-muted-foreground hover:text-foreground"
+            )}
+          >
+            {isRTL ? "فقرة" : "Paragraph"}
+          </button>
+        </div>
       </div>
 
       {/* Main panels */}

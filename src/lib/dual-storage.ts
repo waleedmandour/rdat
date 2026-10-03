@@ -1,11 +1,21 @@
 import { GlossaryEntry, StoreName } from "../types";
 
 const DB_NAME = "rdat_copilot_db";
-// Bumped from 2 → 3 for audit fix #6: the `segments` store keyPath
-// changed from auto-increment-int to a deterministic string id so
-// re-confirming an edited segment upserts instead of duplicating.
-// The onupgradeneeded handler drops the old store and recreates it.
-const DB_VERSION = 3;
+// v2 → v3 (audit fix #6): segments store keyPath changed from
+// autoIncrement-int to a deterministic string id so re-confirming an
+// edited segment upserts instead of appending a duplicate. The
+// onupgradeneeded handler drops the old store and recreates it.
+//
+// v3 → v4 (Task 2, v0.4.0): ADDITIVE migration. We add a `sourceHash`
+// index on the segments store so the hydration path can refuse to
+// re-attach a saved translation to a different source text. We do NOT
+// drop or recreate the store — existing confirmed segments are kept.
+// Old entries without a `sourceHash` field remain readable (the field
+// is simply undefined); the hydration path treats undefined as "do not
+// attach" (conservative — the user re-translates). This is forward-
+// compatible with the planned docId follow-up: docId will be another
+// additive index in v5.
+const DB_VERSION = 4;
 
 // Key used inside the `sync_meta` object store to persist the set of
 // reference DB IDs that the user has downloaded. Stored as a string[]
@@ -30,7 +40,7 @@ export function openDB(): Promise<IDBDatabase> {
   dbPromise = new Promise<IDBDatabase>((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const db = request.result;
       if (!db.objectStoreNames.contains("tm_entries")) {
         db.createObjectStore("tm_entries", { keyPath: "id", autoIncrement: true });
@@ -38,17 +48,31 @@ export function openDB(): Promise<IDBDatabase> {
       if (!db.objectStoreNames.contains("glossary")) {
         db.createObjectStore("glossary", { keyPath: "id", autoIncrement: true });
       }
-      // Audit fix #6: segments store now uses a deterministic string
-      // id ("{sourceLang}-{targetLang}-{segment_index}") so re-confirming
-      // an edited segment upserts instead of creating a duplicate.
-      // If upgrading from DB_VERSION 2 (autoIncrement int key), drop
-      // and recreate. Existing user data is lost on this migration —
-      // acceptable because the old data was full of duplicates anyway
-      // and segments are re-confirmable from the editor.
+      // Segments store.
+      //   v2 → v3: dropped and recreated (keyPath change). For users
+      //   arriving from v2, we still drop+recreate here.
+      //   v3 → v4: ADDITIVE. If the store already exists (v3 user),
+      //   we keep it and add a `sourceHash` index. If it doesn't exist
+      //   (fresh install or v2 upgrade), we create it with the index.
+      //   We NEVER drop on a v3→v4 upgrade — existing confirmed
+      //   segments are preserved.
+      let segStore: IDBObjectStore;
       if (db.objectStoreNames.contains("segments")) {
-        db.deleteObjectStore("segments");
+        segStore = request.transaction!.objectStore("segments");
+        // Only drop for the v2→v3 path (oldVersion < 3). For v3→v4 we
+        // keep the store and just add the index.
+        if (event.oldVersion < 3) {
+          db.deleteObjectStore("segments");
+          segStore = db.createObjectStore("segments", { keyPath: "id" });
+        }
+      } else {
+        segStore = db.createObjectStore("segments", { keyPath: "id" });
       }
-      db.createObjectStore("segments", { keyPath: "id" });
+      // Add the sourceHash index (idempotent — createIndex is a no-op
+      // if the index already exists).
+      if (!segStore.indexNames.contains("sourceHash")) {
+        segStore.createIndex("sourceHash", "sourceHash", { unique: false });
+      }
       if (!db.objectStoreNames.contains("sync_meta")) {
         db.createObjectStore("sync_meta", { keyPath: "key" });
       }
