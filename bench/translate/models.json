@@ -1,0 +1,116 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "description": "Translation benchmark candidate models. Each entry is verified against the live Ollama registry or HuggingFace Hub. Edit this file to add/remove candidates.",
+  "candidates": [
+    {
+      "ref": "gemma4:e4b-it-qat",
+      "family": "gemma4",
+      "source": "ollama",
+      "promptProfile": "plain",
+      "supportsThinkingOff": true,
+      "licence": "Gemma Terms of Use (Google)",
+      "licenceNote": "Permitted for commercial use subject to Gemma Terms. Not a standard OSS licence.",
+      "size": "~3.2 GB",
+      "verified": "2026-10-03 via registry.ollama.ai manifest (valid)"
+    },
+    {
+      "ref": "gemma4:12b-it-qat",
+      "family": "gemma4",
+      "source": "ollama",
+      "promptProfile": "plain",
+      "supportsThinkingOff": true,
+      "licence": "Gemma Terms of Use (Google)",
+      "licenceNote": "Permitted for commercial use subject to Gemma Terms.",
+      "size": "~7.2 GB",
+      "verified": "2026-10-03 via registry.ollama.ai manifest (7.15 GB, 4 layers)"
+    },
+    {
+      "ref": "qwen3.5:4b",
+      "family": "qwen3.5",
+      "source": "ollama",
+      "promptProfile": "plain",
+      "supportsThinkingOff": true,
+      "licence": "Apache-2.0",
+      "licenceNote": "",
+      "size": "~2.5 GB",
+      "verified": "2026-10-03 via ollama.com/library/qwen3.5 (tags: 0.8b, 2b, 4b, 9b, 35b, 122b)"
+    },
+    {
+      "ref": "qwen3.5:9b",
+      "family": "qwen3.5",
+      "source": "ollama",
+      "promptProfile": "plain",
+      "supportsThinkingOff": true,
+      "licence": "Apache-2.0",
+      "licenceNote": "",
+      "size": "~5.5 GB",
+      "verified": "2026-10-03 via ollama.com/library/qwen3.5"
+    },
+    {
+      "ref": "hf.co/tencent/HY-MT1.5-1.8B-GGUF:Q8_0",
+      "family": "hy-mt",
+      "source": "huggingface",
+      "promptProfile": "hy-mt",
+      "supportsThinkingOff": false,
+      "licence": "Tencent HY Community License",
+      "licenceNote": "Territory/use restrictions may apply. Check the licence text at huggingface.co/tencent/HY-MT1.5-1.8B-GGUF before commercial use.",
+      "size": "~1.9 GB",
+      "verified": "2026-10-03 via huggingface.co/api/models/tencent/HY-MT1.5-1.8B-GGUF (not gated, Q8_0 file exists)"
+    },
+    {
+      "ref": "hf.co/tencent/HY-MT1.5-7B-GGUF:Q4_K_M",
+      "family": "hy-mt",
+      "source": "huggingface",
+      "promptProfile": "hy-mt",
+      "supportsThinkingOff": false,
+      "licence": "Tencent HY Community License",
+      "licenceNote": "Same as 1.8B.",
+      "size": "~4.4 GB",
+      "verified": "2026-10-03 via huggingface.co/api/models (repo exists, not gated). Q4_K_M file exists per the model card."
+    },
+    {
+      "ref": "hf.co/tencent/Hy-MT2-1.8B-GGUF:Q4_K_M",
+      "family": "hy-mt2",
+      "source": "huggingface",
+      "promptProfile": "hy-mt",
+      "supportsThinkingOff": false,
+      "licence": "Apache-2.0",
+      "licenceNote": "",
+      "size": "~1.1 GB",
+      "verified": "2026-10-03 via huggingface.co/api/models/tencent/Hy-MT2-1.8B-GGUF (327k downloads, Apache-2.0)"
+    },
+    {
+      "ref": "hf.co/tencent/Hy-MT2-7B-GGUF:Q4_K_M",
+      "family": "hy-mt2",
+      "source": "huggingface",
+      "promptProfile": "hy-mt",
+      "supportsThinkingOff": false,
+      "licence": "Apache-2.0",
+      "licenceNote": "",
+      "size": "~4.4 GB",
+      "verified": "2026-10-03 via huggingface.co/api/models/tencent/Hy-MT2-7B-GGUF (349k downloads, Apache-2.0)"
+    },
+    {
+      "ref": "hf.co/google/translategemma-4b-it:Q8_0",
+      "family": "translategemma",
+      "source": "huggingface",
+      "promptProfile": "translategemma",
+      "supportsThinkingOff": true,
+      "licence": "Gemma Terms of Use (Google)",
+      "licenceNote": "TranslateGemma uses a specific prompt format: single user message, no system message. Glossary hints go into the user message.",
+      "size": "~4.0 GB",
+      "verified": "2026-10-03 via huggingface.co/api/models?search=translategemma (google/translategemma-4b-it exists, 37k downloads, not gated). NOTE: translategemma does NOT exist on Ollama registry — must use hf.co/ prefix."
+    },
+    {
+      "ref": "gemini-3.8-flash",
+      "family": "gemini",
+      "source": "cloud",
+      "promptProfile": "rdat-rag",
+      "supportsThinkingOff": false,
+      "licence": "Google Gemini API Terms",
+      "licenceNote": "Cloud model. Requires user's own API key. Public benchmark data only (FLORES+, WMT24++). Domain data excluded unless --allow-cloud-domain is passed. thinkingLevel=LOW for ghost text.",
+      "size": "cloud (no local download)",
+      "verified": "2026-10-03 via ai.google.dev/gemini-api/docs/models (stable, supports low/medium/high thinking levels)"
+    }
+  ]
+}

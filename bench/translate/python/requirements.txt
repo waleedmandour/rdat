@@ -1,0 +1,4 @@
+sacrebleu>=2.4
+# Optional (for COMET):
+# torch>=2.0
+# unbabel-comet>=2.0

@@ -1,0 +1,11 @@
+id	direction	source	reference	glossary
+domain_001	en-ar	The computer-assisted translation tool improved productivity.	أداة الترجمة بمساعدة الحاسوب حسّنت الإنتاجية.	[{"source":"computer-assisted translation","target":"الترجمة بمساعدة الحاسوب"}]
+domain_002	en-ar	Machine translation quality has improved significantly.	تحسنت جودة الترجمة الآلية بشكل كبير.	[{"source":"machine translation","target":"الترجمة الآلية"}]
+domain_003	en-ar	The translation memory stores previous translations.	تخزن ذاكرة الترجمة الترجمات السابقة.	[{"source":"translation memory","target":"ذاكرة الترجمة"}]
+domain_004	en-ar	Post-editing is required for all machine-translated content.	التحرير بعد الترجمة مطلوب لكل المحتوى المترجم آلياً.	[{"source":"post-editing","target":"التحرير بعد الترجمة"}]
+domain_005	en-ar	The glossary contains domain-specific terminology.	يحتوي المسرد على مصطلحات خاصة بالمجال.	[{"source":"glossary","target":"المسرد"}]
+domain_006	ar-en	تستخدم ذاكرة الترجمة لمطابقة المقاطع السابقة.	The translation memory is used to match previous segments.	[{"source":"translation memory","target":"ذاكرة الترجمة"}]
+domain_007	ar-en	الترجمة الآلية العصبية حققت تقدماً كبيراً.	Neural machine translation has made significant progress.	[{"source":"neural machine translation","target":"الترجمة الآلية العصبية"}]
+domain_008	ar-en	إدارة المصطلحات مهمة للاتساق.	Terminology management is important for consistency.	[{"source":"terminology management","target":"إدارة المصطلحات"}]
+domain_009	ar-en	التحليل اللغوي يساعد في فهم البنية.	Linguistic analysis helps understand the structure.	[{"source":"linguistic analysis","target":"التحليل اللغوي"}]
+domain_010	en-ar	Quality assurance ensures translation accuracy.	ضمان الجودة يضمن دقة الترجمة.	[{"source":"quality assurance","target":"ضمان الجودة"}]

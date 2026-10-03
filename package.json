@@ -15,7 +15,10 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "tauri:icon": "tauri icon public/icon-source-1024.png"
+    "tauri:icon": "tauri icon public/icon-source-1024.png",
+    "bench:translate": "tsx bench/translate/bench-translate.ts",
+    "bench:translate:score": "python bench/translate/python/score.py",
+    "bench:translate:test": "tsx bench/translate/test-bench.ts"
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
