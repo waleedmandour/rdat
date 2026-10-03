@@ -96,7 +96,7 @@ export function TargetEditor({
   const isRTL = locale === "ar";
 
   const { generateBurst } = useGemini();
-  const { engineMode, useCloudFallback, loadedModel } = useSettingsStore();
+  const { engineMode, useCloudFallback, loadedModel, editorFontSize } = useSettingsStore();
   const direction = useWorkspaceStore((s) => s.direction);
   const isTargetRTL = direction === "en-ar"; // Target is Arabic (RTL) for EN-AR, English (LTR) for AR-EN
   const { showToast } = useToast();
@@ -181,6 +181,18 @@ export function TargetEditor({
   // badge and aria-live are also gated.
   const gateOpen = isGhostGateOpen(translationText);
   const displayedGhostSuggestion = gateOpen ? ghostSuggestion : "";
+
+  // ─── Auto-growing textarea (Task 1a, v0.4.0) ────────────────────
+  // Recompute height when the text changes OR when the font size
+  // changes (so resizing doesn't clip content or cause scrollbar
+  // jitter). We set height to "auto" first to collapse, then to
+  // scrollHeight to grow.
+  useEffect(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    el.style.height = "auto";
+    el.style.height = `${el.scrollHeight}px`;
+  }, [translationText, editorFontSize, isActive]);
 
   const fetchSuggestions = useCallback(async (typedText: string) => {
     // ════════════════════════════════════════════════════════════════
@@ -655,8 +667,12 @@ export function TargetEditor({
             the textarea is empty. */}
         {!translationText && (
           <div
-            className={cn("absolute top-3.5 text-sm md:text-base text-muted-foreground/40 font-medium pointer-events-none select-none", isTargetRTL ? "right-4" : "left-4")}
+            className={cn("absolute top-3.5 text-muted-foreground/40 font-medium pointer-events-none select-none", isTargetRTL ? "right-4" : "left-4")}
             dir={isTargetRTL ? "rtl" : "ltr"}
+            style={{
+              fontSize: "var(--editor-font-size, 14px)",
+              lineHeight: "var(--editor-line-height, 1.55)",
+            }}
           >
             {isTargetRTL
               ? (isRTL ? "أدخل الترجمة العربية هنا..." : "Enter translation in Arabic...")
@@ -671,7 +687,11 @@ export function TargetEditor({
           dir={isTargetRTL ? "rtl" : "ltr"}
           placeholder=""
           rows={2}
-          className={cn("w-full bg-background/50 border dark:border-white/10 border-border/80 rounded-xl p-4 text-sm md:text-base text-foreground focus:outline-none focus:border-primary/50 font-medium leading-relaxed resize-none transition-all", isTargetRTL ? "text-right" : "text-left")}
+          className={cn("w-full bg-background/50 border dark:border-white/10 border-border/80 rounded-xl p-4 text-foreground focus:outline-none focus:border-primary/50 font-medium resize-none transition-all", isTargetRTL ? "text-right" : "text-left")}
+          style={{
+            fontSize: "var(--editor-font-size, 14px)",
+            lineHeight: "var(--editor-line-height, 1.55)",
+          }}
         />
 
         {/*
@@ -686,7 +706,7 @@ export function TargetEditor({
         */}
         {displayedGhostSuggestion && isActive && (
           <div
-            className="absolute bottom-3 left-4 pointer-events-none select-none text-[10px] font-mono text-primary/40 bg-primary/5 border border-primary/20 px-2.5 py-0.5 rounded-md flex items-center gap-1.5"
+            className="absolute bottom-3 left-4 pointer-events-none select-none text-primary/40 bg-primary/5 border border-primary/20 px-2.5 py-0.5 rounded-md flex items-center gap-1.5"
             dir={isRTL ? "rtl" : "ltr"}
             aria-live="polite"
             aria-label={
@@ -695,10 +715,10 @@ export function TargetEditor({
                 : `Suggestion: ${displayedGhostSuggestion}`
             }
           >
-            <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
-            <span>[Tab] {isRTL ? "إتمام تلقائي" : "Auto-complete"} (
+            <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse shrink-0" />
+            <span className="text-[10px] font-mono">[Tab] {isRTL ? "إتمام تلقائي" : "Auto-complete"} (</span>
               <span className={cn(
-                "inline-flex items-center gap-0.5 px-1 rounded font-bold",
+                "inline-flex items-center gap-0.5 px-1 rounded font-bold text-[10px] font-mono",
                 tierSource === "lte" && "bg-emerald-500/15 text-emerald-500",
                 tierSource === "local-llm" && "bg-blue-500/15 text-blue-500",
                 tierSource === "gemini" && "bg-amber-500/15 text-amber-500"
@@ -709,7 +729,18 @@ export function TargetEditor({
                 )}
                 {tierSource === "gemini" && (isRTL ? "سحابي" : "GEMINI")}
               </span>
-            ): {displayedGhostSuggestion}</span>
+            <span className="text-[10px] font-mono">): </span>
+            {/* The suggestion text itself tracks the editor font size
+                (Task 1a) so it's readable at every size. */}
+            <span
+              style={{
+                fontSize: "var(--editor-font-size, 14px)",
+                lineHeight: "var(--editor-line-height, 1.55)",
+              }}
+              className="font-medium"
+            >
+              {displayedGhostSuggestion}
+            </span>
           </div>
         )}
       </div>

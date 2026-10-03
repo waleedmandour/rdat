@@ -2,8 +2,9 @@ import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useLanguage } from "../../context/LanguageContext";
 import { useToast } from "../../context/ToastContext";
 import { useWorkspaceStore } from "../../stores/workspace-store";
+import { useSettingsStore, EDITOR_FONT_SIZE_MIN, EDITOR_FONT_SIZE_MAX, EDITOR_FONT_SIZE_DEFAULT } from "../../stores/settings-store";
 import { useDualStorage } from "../../hooks/useDualStorage";
-import { putToStore, getAllofStore } from "../../lib/dual-storage";
+import { putToStore, getAllofStore, deleteFromStore } from "../../lib/dual-storage";
 import { SourceEditor } from "./SourceEditor";
 import { TargetEditor } from "./TargetEditor";
 import { useGemini } from "../../hooks/useGemini";
@@ -19,6 +20,10 @@ import {
   BookMarked,
   GraduationCap,
   Type,
+  Minus,
+  Plus,
+  RotateCcw,
+  Trash2,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -36,6 +41,7 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
 
   const {
     sourceText,
+    setSourceText,
     targetTexts,
     setTargetTexts,
     setTargetTextAtIndex,
@@ -54,6 +60,49 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
   const isArToEn = direction === "ar-en";
 
   const { refreshCounts } = useDualStorage();
+
+  // ─── Font size controls (Task 1a, v0.4.0) ────────────────────────
+  // Persisted in settings-store. Driven through one CSS variable
+  // (--editor-font-size) on the workspace root so source segments,
+  // target editor, and ghost-text chip all track it. Script-aware
+  // line-height: Arabic ≥ 1.8 (diacritics), Latin ~1.5.
+  const { editorFontSize, setEditorFontSize } = useSettingsStore();
+  const isWorkspaceFocusedRef = useRef(false);
+
+  const bumpFontSize = useCallback((delta: number) => {
+    setEditorFontSize(editorFontSize + delta);
+  }, [editorFontSize, setEditorFontSize]);
+
+  const resetFontSize = useCallback(() => {
+    setEditorFontSize(EDITOR_FONT_SIZE_DEFAULT);
+  }, [setEditorFontSize]);
+
+  // Keyboard shortcuts: Ctrl/Cmd + "+" / "-" / "0" ONLY while focus is
+  // inside the translation workspace. preventDefault only then, so
+  // browser zoom works elsewhere.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!isWorkspaceFocusedRef.current) return;
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      if (e.key === "+" || e.key === "=") {
+        e.preventDefault();
+        bumpFontSize(2);
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        bumpFontSize(-2);
+      } else if (e.key === "0") {
+        e.preventDefault();
+        resetFontSize();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [bumpFontSize, resetFontSize]);
+
+  // ─── Clear text dialog state (Task 1b, v0.4.0) ───────────────────
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
+  const [clearAlsoSaved, setClearAlsoSaved] = useState(true);
 
   // ─── Paragraph-faithful CAT-grade segmentation ───────────────────
   // Replaces the old `sourceText.split(/\n+/)` line-only splitter with
@@ -374,6 +423,68 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     URL.revokeObjectURL(url);
   };
 
+  // ─── Clear text (Task 1b, v0.4.0) ────────────────────────────────
+  // Clears: sourceText, targetTexts, currentSegmentIndex, segmentation
+  // state, manual split/merge overrides. Aborts in-flight LLM/Gemini
+  // requests (via clearPrefetchCache + the TargetEditor effect that
+  // resets on segment-count change). If the checkbox is checked, also
+  // deletes saved translations for the ACTIVE language pair only.
+  // Glossary, TM, and settings are never touched.
+  const handleClearText = async () => {
+    const sourceLang = isArToEn ? "ar" : "en";
+    const targetLang = isArToEn ? "en" : "ar";
+
+    // 1. Clear prefetch/ghost caches (aborts stale suggestions)
+    clearPrefetchCache();
+
+    // 2. Optionally delete saved translations for this language pair
+    if (clearAlsoSaved) {
+      try {
+        const allEntries = await getAllofStore<SegmentEntry>("segments");
+        const toDelete = allEntries.filter(
+          (e) => e.source_lang === sourceLang && e.target_lang === targetLang
+        );
+        // Delete each by its id. We don't use clearStore("segments")
+        // because that would wipe ALL language pairs.
+        for (const entry of toDelete) {
+          if (entry.id !== undefined) {
+            await deleteFromStore("segments", entry.id);
+          }
+        }
+      } catch (e) {
+        console.warn("[ClearText] Failed to delete saved segments:", e);
+      }
+    }
+
+    // 3. Reset workspace state (this also clears manual overrides via
+    //    the setSourceText setter in workspace-store)
+    setSourceText("");
+    setTargetTexts([]);
+    setCurrentSegmentIndex(0);
+    setHighlightedSegmentIndex(null);
+
+    // 4. Reset confirmed indices
+    setConfirmedIndices({});
+
+    // 5. Reset the load-done flag so re-importing hydrates fresh
+    initialLoadDoneRef.current = false;
+    prevSentencesLenRef.current = 0;
+
+    setClearDialogOpen(false);
+    await refreshCounts();
+
+    showToast(
+      isRTL
+        ? clearAlsoSaved
+          ? "تم مسح النص والترجمات المحفوظة لهذا الاتجاه"
+          : "تم مسح النص (مع الاحتفاظ بالترجمات المحفوظة)"
+        : clearAlsoSaved
+          ? "Cleared text and saved translations for this direction"
+          : "Cleared text (saved translations kept)",
+      "success"
+    );
+  };
+
   const completionPercent = useMemo(() => {
     if (sentences.length === 0) return 0;
     const confirmedCount = Object.values(confirmedIndices).filter(Boolean).length;
@@ -433,7 +544,24 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
   }, [sidebarSearchTerm, glossaryEntries]);
 
   return (
-    <div className="h-full flex flex-col bg-background overflow-hidden" dir={isRTL ? "rtl" : "ltr"}>
+    <div
+      className="h-full flex flex-col bg-background overflow-hidden"
+      dir={isRTL ? "rtl" : "ltr"}
+      style={{
+        // Task 1a: single CSS variable drives source segments, target
+        // editor, and ghost-text chip. Script-aware line-height: Arabic
+        // ≥ 1.8 (diacritics not clipped), Latin ~1.5.
+        ["--editor-font-size" as string]: `${editorFontSize}px`,
+        ["--editor-line-height" as string]: isRTL ? "1.85" : "1.55",
+      }}
+      onFocusCapture={() => { isWorkspaceFocusedRef.current = true; }}
+      onBlurCapture={(e) => {
+        // Only mark unfocused when focus leaves the workspace entirely
+        if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+          isWorkspaceFocusedRef.current = false;
+        }
+      }}
+    >
 
       {/* Direction Toggle Bar */}
       <div className="h-9 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-center gap-2 px-4 select-none">
@@ -491,6 +619,59 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
           >
             {isRTL ? "فقرة" : "Paragraph"}
           </button>
+        </div>
+
+        {/* Font size controls (Task 1a) + Clear text (Task 1b) */}
+        <div className="flex items-center gap-1 ms-2">
+          {/* A- : decrease */}
+          <button
+            onClick={() => bumpFontSize(-2)}
+            disabled={editorFontSize <= EDITOR_FONT_SIZE_MIN}
+            title={isRTL ? `تصغير الخط (${editorFontSize}px)` : `Decrease font (${editorFontSize}px)`}
+            aria-label={isRTL ? `تصغير الخط، الحالي ${editorFontSize} بكسل` : `Decrease font size, current ${editorFontSize}px`}
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
+          >
+            <Minus className="w-3 h-3" />
+          </button>
+          {/* Current size (also Reset on click) */}
+          <button
+            onClick={resetFontSize}
+            title={isRTL ? `إعادة الضبط (الحالي ${editorFontSize}px، الافتراضي ${EDITOR_FONT_SIZE_DEFAULT}px)` : `Reset to default (current ${editorFontSize}px, default ${EDITOR_FONT_SIZE_DEFAULT}px)`}
+            aria-label={isRTL ? `إعادة حجم الخط للوضع الافتراضي، الحالي ${editorFontSize} بكسل` : `Reset font size to default, current ${editorFontSize}px`}
+            className="px-1.5 py-0.5 rounded text-[9px] font-mono font-bold text-muted-foreground hover:text-foreground hover:bg-surface-hover cursor-pointer transition-all min-w-[28px] text-center"
+          >
+            {editorFontSize}
+          </button>
+          {/* A+ : increase */}
+          <button
+            onClick={() => bumpFontSize(2)}
+            disabled={editorFontSize >= EDITOR_FONT_SIZE_MAX}
+            title={isRTL ? `تكبير الخط (${editorFontSize}px)` : `Increase font (${editorFontSize}px)`}
+            aria-label={isRTL ? `تكبير الخط، الحالي ${editorFontSize} بكسل` : `Increase font size, current ${editorFontSize}px`}
+            className="p-0.5 rounded text-muted-foreground hover:text-foreground hover:bg-surface-hover disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer transition-all"
+          >
+            <Plus className="w-3 h-3" />
+          </button>
+          <button
+            onClick={resetFontSize}
+            title={isRTL ? "إعادة الضبط" : "Reset font size"}
+            aria-label={isRTL ? "إعادة حجم الخط للوضع الافتراضي" : "Reset font size to default"}
+            className="p-0.5 rounded text-muted-foreground/50 hover:text-foreground hover:bg-surface-hover cursor-pointer transition-all"
+          >
+            <RotateCcw className="w-3 h-3" />
+          </button>
+
+          {/* Clear text (Task 1b) — only visible when source text exists */}
+          {sourceText.trim().length > 0 && (
+            <button
+              onClick={() => { setClearAlsoSaved(true); setClearDialogOpen(true); }}
+              title={isRTL ? "مسح النص" : "Clear text"}
+              aria-label={isRTL ? "مسح النص المصدر والترجمات" : "Clear source text and translations"}
+              className="ms-1 p-0.5 rounded text-rose-500 hover:bg-rose-500/10 cursor-pointer transition-all"
+            >
+              <Trash2 className="w-3 h-3" />
+            </button>
+          )}
         </div>
       </div>
 
@@ -812,6 +993,71 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       </aside>
 
       </div>{/* End main panels wrapper */}
+
+      {/* ─── Clear text confirmation dialog (Task 1b, v0.4.0) ─────── */}
+      {/* Theme-aware (uses bg-background/border-border tokens), RTL-aware
+          (dir inherits from root, uses logical ms/me properties). */}
+      {clearDialogOpen && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+          dir={isRTL ? "rtl" : "ltr"}
+          onClick={() => setClearDialogOpen(false)}
+        >
+          <div
+            className="bg-background border border-border rounded-2xl shadow-2xl max-w-md w-full mx-4 p-6 space-y-4 animate-fade-in"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-3">
+              <div className="p-2 rounded-full bg-rose-500/10 border border-rose-500/20">
+                <Trash2 className="w-5 h-5 text-rose-500" />
+              </div>
+              <h2 className="text-base font-bold text-foreground">
+                {isRTL ? "مسح النص" : "Clear Text"}
+              </h2>
+            </div>
+
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              {isRTL
+                ? "سيتم مسح النص المصدر والترجمات الحالية وفهرسة المقاطع. لا يمكن التراجع عن هذا الإجراء."
+                : "This will clear the source text, current translations, and segment indexing. This cannot be undone."}
+            </p>
+
+            <label className="flex items-start gap-2.5 p-3 rounded-lg bg-surface-hover/40 border border-border cursor-pointer">
+              <input
+                type="checkbox"
+                checked={clearAlsoSaved}
+                onChange={(e) => setClearAlsoSaved(e.target.checked)}
+                className="mt-0.5 accent-rose-500"
+              />
+              <span className="text-xs text-foreground leading-relaxed">
+                {isRTL
+                  ? "حذف الترجمات المحفوظة لهذا الزوج اللغوي أيضًا"
+                  : "Also delete saved translations for this language pair"}
+                <span className="block text-[10px] text-muted-foreground mt-0.5">
+                  {isRTL
+                    ? "فقط للاتجاه النشط. القاموس والذاكرة والإعدادات لا تُمسح."
+                    : "Active direction only. Glossary, TM, and settings are never touched."}
+                </span>
+              </span>
+            </label>
+
+            <div className="flex justify-end gap-2 pt-2">
+              <button
+                onClick={() => setClearDialogOpen(false)}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold text-muted-foreground hover:bg-surface-hover cursor-pointer transition-all"
+              >
+                {isRTL ? "إلغاء" : "Cancel"}
+              </button>
+              <button
+                onClick={handleClearText}
+                className="px-4 py-1.5 rounded-lg text-xs font-bold text-white bg-rose-500 hover:bg-rose-600 cursor-pointer transition-all shadow-md"
+              >
+                {isRTL ? "مسح النص" : "Clear Text"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

@@ -278,10 +278,17 @@ export function SourceEditor({
               </div>
 
               {/* Sentence Text */}
-              <p className={cn(
-                "text-sm leading-relaxed font-sans transition-colors duration-150",
-                isActive ? "text-foreground font-medium" : "text-muted-foreground"
-              )}>
+              <p
+                className={cn(
+                  "font-sans transition-colors duration-150",
+                  isActive ? "text-foreground font-medium" : "text-muted-foreground"
+                )}
+                style={{
+                  fontSize: "var(--editor-font-size, 14px)",
+                  lineHeight: "var(--editor-line-height, 1.55)",
+                }}
+                dir={isSourceArabic ? "rtl" : "ltr"}
+              >
                 {sentence}
               </p>
             </div>
