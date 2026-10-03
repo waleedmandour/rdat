@@ -61,63 +61,61 @@ export async function getActiveAdapter(): Promise<LLMAdapter | null> {
 
   selectionPromise = (async () => {
     // ── Step 1: Try Ollama ──
-    // v0.4.2: try Ollama in BOTH Tauri and PWA mode. In PWA mode the
-    // OllamaAdapter uses the HTTP backend (localhost:11434), which
-    // requires the user to set OLLAMA_ORIGINS. If Ollama is available,
-    // it's preferred over WebLLM (faster native inference, larger
-    // model catalog, no WebGPU dependency).
-    // 8-second timeout — the Rust health check tries 3 URLs with 5s
-    // each, plus Tauri IPC overhead. 8s is enough for one full attempt.
-    // In PWA mode, httpHealthCheck has a 3s internal timeout.
-    try {
-      const ollama = new OllamaAdapter();
-      let available = await withTimeout(ollama.isAvailable(), 8000, false);
+    // v0.4.2: try Ollama in BOTH Tauri and PWA mode.
+    // v0.4.3 (Fix 2): in PWA mode, ONLY probe if the user has opted in.
+    // Chrome 142+ shows a Local Network Access permission prompt for
+    // every localhost probe, including for visitors who never installed
+    // Ollama. Making it opt-in means only users who explicitly want to
+    // use a local Ollama see the prompt.
+    const isPwa = !isTauriEnvironment();
+    const pwaOptIn = useSettingsStore.getState().pwaOllamaOptIn;
+    if (isPwa && !pwaOptIn) {
+      console.log("[AdapterFactory] PWA mode: Ollama opt-in is off. Skipping localhost probe (use the Models panel to enable). Falling back to WebLLM.");
+    } else {
+      try {
+        const ollama = new OllamaAdapter();
+        let available = await withTimeout(ollama.isAvailable(), 8000, false);
 
-      // ── Auto-retry on initial launch (Tauri only) ──
-      // In PWA mode, the HTTP check is fast (3s) and doesn't need
-      // retries — Ollama is either reachable or it isn't.
-      if (isTauriEnvironment()) {
-        const savedModel = useSettingsStore.getState().loadedModel;
-        const maxRetries = savedModel ? 3 : 1; // 3 retries if prior model exists
-        const retryDelay = savedModel ? 2000 : 3000; // 2s if prior model, 3s otherwise
+        // ── Auto-retry on initial launch (Tauri only) ──
+        // In PWA mode, the HTTP check is fast (3s) and doesn't need
+        // retries — Ollama is either reachable or it isn't.
+        if (isTauriEnvironment()) {
+          const savedModel = useSettingsStore.getState().loadedModel;
+          const maxRetries = savedModel ? 3 : 1; // 3 retries if prior model exists
+          const retryDelay = savedModel ? 2000 : 3000; // 2s if prior model, 3s otherwise
 
-        for (let attempt = 0; attempt < maxRetries && !available; attempt++) {
-          console.log(`[AdapterFactory] Ollama not detected (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${retryDelay / 1000}s...`);
-          await new Promise(resolve => setTimeout(resolve, retryDelay));
-          available = await withTimeout(ollama.isAvailable(), 8000, false);
-        }
-      }
-
-      if (available) {
-        console.log(`[AdapterFactory] Selected OllamaAdapter (${isTauriEnvironment() ? "Tauri" : "PWA/HTTP"} + Ollama daemon).`);
-        activeAdapter = ollama;
-
-        // ── Auto-load previously selected model ──
-        // If the user had a model loaded in a prior session, automatically
-        // re-select it so they don't have to manually click "Load" every
-        // time they restart the app. The model weights are still cached
-        // by Ollama on disk; this just sets our active model ID.
-        const savedModel = useSettingsStore.getState().loadedModel;
-        if (savedModel) {
-          try {
-            console.log(`[AdapterFactory] Auto-loading previously selected model: ${savedModel}`);
-            await ollama.loadModel(savedModel);
-          } catch (e) {
-            console.warn(`[AdapterFactory] Auto-load of ${savedModel} failed:`, e);
-            // Don't fail the whole detection if auto-load fails — the
-            // user can manually load from the Models panel.
+          for (let attempt = 0; attempt < maxRetries && !available; attempt++) {
+            console.log(`[AdapterFactory] Ollama not detected (attempt ${attempt + 1}/${maxRetries + 1}). Retrying in ${retryDelay / 1000}s...`);
+            await new Promise(resolve => setTimeout(resolve, retryDelay));
+            available = await withTimeout(ollama.isAvailable(), 8000, false);
           }
         }
 
-        return activeAdapter;
+        if (available) {
+          console.log(`[AdapterFactory] Selected OllamaAdapter (${isTauriEnvironment() ? "Tauri" : "PWA/HTTP"} + Ollama daemon).`);
+          activeAdapter = ollama;
+
+          // ── Auto-load previously selected model ──
+          const savedModel = useSettingsStore.getState().loadedModel;
+          if (savedModel) {
+            try {
+              console.log(`[AdapterFactory] Auto-loading previously selected model: ${savedModel}`);
+              await ollama.loadModel(savedModel);
+            } catch (e) {
+              console.warn(`[AdapterFactory] Auto-load of ${savedModel} failed:`, e);
+            }
+          }
+
+          return activeAdapter;
+        }
+        if (isTauriEnvironment()) {
+          console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable after retries.");
+        } else {
+          console.log("[AdapterFactory] PWA mode: Ollama not reachable on localhost:11434 (is OLLAMA_ORIGINS set to this app's origin?). Falling back to WebLLM.");
+        }
+      } catch (e) {
+        console.warn("[AdapterFactory] Ollama check failed:", e);
       }
-      if (isTauriEnvironment()) {
-        console.log("[AdapterFactory] Tauri detected but Ollama daemon not reachable after retries.");
-      } else {
-        console.log("[AdapterFactory] PWA mode: Ollama not reachable on localhost:11434 (is OLLAMA_ORIGINS set?). Falling back to WebLLM.");
-      }
-    } catch (e) {
-      console.warn("[AdapterFactory] Ollama check failed:", e);
     }
 
     // ── Step 2: Try WebLLM (PWA/browser mode only) ──

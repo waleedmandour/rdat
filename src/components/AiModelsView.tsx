@@ -57,6 +57,8 @@ export function AiModelsView() {
     setUseGtr,
     loadedModel,
     setLoadedModel,
+    pwaOllamaOptIn,
+    setPwaOllamaOptIn,
   } = useSettingsStore();
 
   // ─── Adapter State ───────────────────────────────────────────────
@@ -420,6 +422,108 @@ export function AiModelsView() {
             </div>
           </div>
         </div>
+
+        {/* ─── PWA Ollama opt-in (Fix 2, v0.4.3) ─────────────────── */}
+        {/* In PWA mode, if no adapter is active and the user hasn't
+            opted in to Ollama, show a card explaining how to connect.
+            This avoids the Chrome 142+ Local Network Access prompt
+            for every visitor. */}
+        {!adapter && !isTauriEnvironment() && !pwaOllamaOptIn && (
+          <div className="bg-primary/5 border border-primary/20 rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Server className="w-4 h-4 text-primary" />
+              <h3 className="text-xs font-bold text-primary">
+                {isRTL ? "اتصل بأولاما المحلي" : "Connect to local Ollama"}
+              </h3>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {isRTL
+                ? "إذا كان أولاما مثبتاً على جهازك، يمكنك استخدامه من المتصفح. اضغط الزر أدناه للسماح للتطبيق بمحاولة الاتصال بـ localhost:11434. سيطلب كروم إذن الوصول إلى الشبكة المحلية."
+                : "If you have Ollama installed on your machine, you can use it from the browser. Click below to let the app try connecting to localhost:11434. Chrome will ask for Local Network Access permission."}
+            </p>
+            <details className="text-[10.5px] text-muted-foreground">
+              <summary className="cursor-pointer hover:text-foreground font-bold">
+                {isRTL ? "تعليمات الإعداد" : "Setup instructions"}
+              </summary>
+              <div className="mt-2 space-y-2 leading-relaxed">
+                <p>
+                  {isRTL
+                    ? "1. ثبّت أولاما من ollama.com"
+                    : "1. Install Ollama from ollama.com"}
+                </p>
+                <p>
+                  {isRTL
+                    ? "2. اضبط OLLAMA_ORIGINS على أصل هذا التطبيق بالضبط (وليس *):"
+                    : "2. Set OLLAMA_ORIGINS to this app's exact origin (not *):"}
+                </p>
+                <div className="bg-background border border-border rounded p-2 font-mono text-[10px] break-all" dir="ltr">
+                  {typeof window !== "undefined" ? window.location.origin : "https://your-app.vercel.app"}
+                </div>
+                <p className="text-rose-500 font-bold">
+                  {isRTL
+                    ? "تحذير: لا تستخدم OLLAMA_ORIGINS=* لأنها تسمح لأي موقع بالاتصال بأولاما المحلي."
+                    : "Warning: do NOT use OLLAMA_ORIGINS=* — it lets any website call your local Ollama."}
+                </p>
+                <p>
+                  {isRTL
+                    ? "ويندوز: setx OLLAMA_ORIGINS \"<الأصل>\" ثم أعد التشغيل"
+                    : "Windows: setx OLLAMA_ORIGINS \"<origin>\" then restart"}
+                </p>
+                <p>
+                  {isRTL
+                    ? "ماك: launchctl setenv OLLAMA_ORIGINS \"<الأصل>\" ثم أعد التشغيل"
+                    : "macOS: launchctl setenv OLLAMA_ORIGINS \"<origin>\" then restart"}
+                </p>
+                <p>
+                  {isRTL
+                    ? "لينكس: أضف Environment=OLLAMA_ORIGINS=\"<الأصل>\" إلى وحدة systemd"
+                    : "Linux: add Environment=OLLAMA_ORIGINS=\"<origin>\" to the systemd unit"}
+                </p>
+              </div>
+            </details>
+            <button
+              onClick={() => {
+                setPwaOllamaOptIn(true);
+                resetAdapter();
+                // The adapter detection will re-run on the next render cycle
+                setTimeout(() => window.location.reload(), 500);
+              }}
+              className="px-4 py-2 bg-primary text-white rounded-lg text-xs font-bold hover:bg-primary/90 cursor-pointer transition-all"
+            >
+              {isRTL ? "اتصال بأولاما" : "Connect to Ollama"}
+            </button>
+          </div>
+        )}
+
+        {/* PWA Ollama opt-in is on but adapter not found — show diagnostics */}
+        {!adapter && !isTauriEnvironment() && pwaOllamaOptIn && (
+          <div className="bg-amber-500/5 border border-amber-500/20 rounded-xl p-4 space-y-2">
+            <div className="flex items-center gap-2">
+              <ServerCrash className="w-4 h-4 text-amber-500" />
+              <h3 className="text-xs font-bold text-amber-500">
+                {isRTL ? "تعذّر الاتصال بأولاما" : "Could not connect to Ollama"}
+              </h3>
+            </div>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">
+              {isRTL
+                ? "تأكد من أن أولاما يعمل وأن OLLAMA_ORIGINS مضبوط على أصل هذا التطبيق. تحقق أيضاً من إذن الوصول إلى الشبكة المحلية في كروم."
+                : "Make sure Ollama is running and OLLAMA_ORIGINS is set to this app's origin. Also check Chrome's Local Network Access permission."}
+            </p>
+            <p className="text-[10px] text-muted-foreground font-mono" dir="ltr">
+              {typeof window !== "undefined" ? `OLLAMA_ORIGINS="${window.location.origin}"` : ""}
+            </p>
+            <button
+              onClick={() => {
+                setPwaOllamaOptIn(false);
+                resetAdapter();
+                setTimeout(() => window.location.reload(), 500);
+              }}
+              className="text-[10px] text-muted-foreground hover:text-foreground cursor-pointer underline"
+            >
+              {isRTL ? "إلغاء تفعيل الاتصال بأولاما" : "Disable Ollama opt-in"}
+            </button>
+          </div>
+        )}
 
         {/* Model Catalog */}
         {adapter ? (

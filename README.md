@@ -188,11 +188,17 @@ A direction toggle at the top of the editor lets you switch between **EN to AR**
 
 Previously the PWA only used WebLLM (WebGPU) as its local LLM — Ollama was Tauri-only. v0.4.2 adds an HTTP backend to `OllamaAdapter` so the PWA can reach a locally-installed Ollama daemon at `http://localhost:11434`. The adapter factory now tries Ollama first in both Tauri and PWA mode, falling back to WebLLM only if Ollama is unreachable.
 
-**To use Ollama from the PWA:** set `OLLAMA_ORIGINS=*` (or your PWA origin) in your Ollama environment so it accepts cross-origin requests from the browser. Then start Ollama normally — the PWA will detect it automatically. This gives PWA users access to Ollama's full model catalog (including the 12B QAT model below) with native-speed inference, without requiring the Tauri desktop app.
+**To use Ollama from the PWA (opt-in):** open the Models panel and click "Connect to local Ollama". The PWA does NOT probe localhost on boot (Chrome 142+ shows a Local Network Access permission prompt for every visitor, including those without Ollama). When you opt in, set `OLLAMA_ORIGINS` to the **exact origin** of the PWA (not `*` — `*` lets any website call your local Ollama):
+
+- **Windows:** `setx OLLAMA_ORIGINS "https://your-app.vercel.app"` then restart Ollama
+- **macOS:** `launchctl setenv OLLAMA_ORIGINS "https://your-app.vercel.app"` then restart Ollama
+- **Linux:** add `Environment=OLLAMA_ORIGINS="https://your-app.vercel.app"` to the Ollama systemd unit, then `systemctl --user daemon-reload && systemctl --user restart ollama`
+
+The app shows its own origin in the Models panel setup instructions so you can copy-paste it exactly.
 
 ### Gemma 4 12B QAT + model filtering
 
-- **Added `gemma4:12b-qat`** to the recommended Ollama catalog — the Quantization-Aware Training variant of Gemma 4 12B (~7 GB, highest quality).
+- **Added `gemma4:12b-it-qat`** (corrected in v0.4.3 from the invalid `gemma4:12b-qat`) to the recommended Ollama catalog — the Quantization-Aware Training variant of Gemma 4 12B (~7.2 GB, highest quality). Also added `gemma4:e2b-it-qat` and `gemma4:e4b-it-qat`.
 - **Filtered out non-translation models** (embedding models like `nomic-embed`, vision models like `llava`, code-only models like `codellama`) from the "user-pulled" list. The Models panel now stays focused on translation-relevant models. Users can still pull hidden models via Ollama directly; RDAT just doesn't display them.
 
 ### Instruction text scales with editor font
