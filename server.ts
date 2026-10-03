@@ -50,7 +50,7 @@ async function startServer() {
       const systemPrompt = buildBurstPrompt(sourceText, targetPrefix || "", dir);
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
         contents: systemPrompt,
         config: {
           responseMimeType: "application/json"
@@ -82,7 +82,7 @@ async function startServer() {
       const systemPrompt = buildFullPrompt(sourceText, targetPrefix || "", dir);
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
         contents: systemPrompt,
       });
 
@@ -111,7 +111,7 @@ async function startServer() {
       const systemPrompt = buildTutorPrompt(sourceText, targetText, isRTL, dir);
 
       const response = await ai.models.generateContent({
-        model: "gemini-2.5-flash",
+        model: process.env.GEMINI_MODEL || "gemini-3.8-flash",
         contents: systemPrompt,
         config: {
           responseMimeType: "application/json"

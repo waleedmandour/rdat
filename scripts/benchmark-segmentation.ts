@@ -161,6 +161,7 @@ async function main() {
   let totalTokens = 0;
   let totalAlignedTokens = 0;
 
+  // Single pass: compute TP/FP/FN per document, accumulate.
   for (const row of rows) {
     const { tokens, labels, text } = row;
     totalTokens += tokens.length;
@@ -180,37 +181,6 @@ async function main() {
     const { segments } = segment(text, { granularity: "sentence" });
 
     // Compute boundaries
-    const gold = goldBoundaries(labels);
-    const predicted = predictBoundaries(segments, tokenOffsets);
-
-    // Count TP / FP / FN
-    for (const p of predicted) {
-      if (gold.has(p)) totalCorrect++;
-      else totalPredicted++; // FP
-    }
-    totalPredicted += totalCorrect; // TP + FP
-    for (const g of gold) {
-      if (!predicted.has(g)) {
-        // FN — but only count if the token was aligned (we can't predict
-        // a boundary at a token we couldn't locate)
-        if (g < tokenOffsets.length) {
-          // FN
-        }
-      }
-    }
-    // Simpler recount:
-  }
-
-  // Recompute cleanly with a single pass
-  totalGold = 0;
-  totalPredicted = 0;
-  totalCorrect = 0;
-  for (const row of rows) {
-    const { tokens, labels, text } = row;
-    const tokenOffsets = buildTokenOffsets(tokens, text);
-    if (tokenOffsets.length < tokens.length * 0.5) continue;
-
-    const { segments } = segment(text, { granularity: "sentence" });
     const gold = goldBoundaries(labels);
     const predicted = predictBoundaries(segments, tokenOffsets);
 

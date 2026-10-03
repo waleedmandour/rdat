@@ -41,9 +41,9 @@ function getConfiguredGeminiModel(): string {
 /**
  * Error thrown when the Gemini API indicates the requested model has
  * been retired or is no longer available. Surfaces a specific actionable
- * message instead of a generic fatal error. Subclass of FatalError so
- * the useGemini retry wrapper does NOT retry it (retrying a retired
- * model is pointless).
+ * message instead of a generic fatal error. The useGemini retry wrapper
+ * checks `instanceof ModelRetiredError` explicitly and re-throws
+ * immediately (no retry — retrying a retired model is pointless).
  */
 export class ModelRetiredError extends Error {
   constructor(modelId: string) {

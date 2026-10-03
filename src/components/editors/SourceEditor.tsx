@@ -40,7 +40,7 @@ export function SourceEditor({
   const [pendingFileName, setPendingFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  const handleImportSubmit = () => {
+  const handleImportSubmit = async () => {
     if (!importText.trim()) {
       showToast(isRTL ? "برجاء إدخال نص أولا!" : "Please write or drop some text first!", "warning");
       return;
@@ -69,9 +69,30 @@ export function SourceEditor({
     // the document a meaningful display name for the future document-
     // manager UI + for the JSON backup filename.
     const docId = useWorkspaceStore.getState().currentDocId;
+    const sourceLang = direction === "ar-en" ? "ar" : "en";
+    const targetLang = direction === "ar-en" ? "en" : "ar";
     if (docId) {
       const name = pendingFileName || "Pasted text";
       setCurrentDoc(docId, name);
+      // Persist the document metadata row to IndexedDB so the JSON
+      // backup/restore + future document-manager UI have data to
+      // operate on. Without this, handleExportJsonBackup always
+      // exports an empty documents[] array.
+      try {
+        const { putToStore } = await import("../../lib/dual-storage");
+        const now = new Date().toISOString();
+        await putToStore("documents", {
+          id: docId,
+          name,
+          source_lang: sourceLang,
+          target_lang: targetLang,
+          segment_count: parsed.length,
+          created_at: now,
+          updated_at: now,
+        });
+      } catch (e) {
+        console.warn("[SourceEditor] Failed to persist document metadata:", e);
+      }
     }
     onSelectIdx(0);
     setIsImportOpen(false);
