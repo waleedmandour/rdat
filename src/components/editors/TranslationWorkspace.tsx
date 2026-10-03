@@ -8,7 +8,7 @@ import { putToStore, getAllofStore, deleteFromStore } from "../../lib/dual-stora
 import { SourceEditor } from "./SourceEditor";
 import { TargetEditor } from "./TargetEditor";
 import { useGemini } from "../../hooks/useGemini";
-import { SegmentEntry, GlossaryEntry, TutorAnalysis } from "../../types";
+import { SegmentEntry, GlossaryEntry, TutorAnalysis, DocumentMeta } from "../../types";
 import { segment } from "../../lib/segmentation";
 import { clearPrefetchCache } from "../../lib/local-llm-engine";
 import {
@@ -24,6 +24,9 @@ import {
   Plus,
   RotateCcw,
   Trash2,
+  FileText,
+  Save,
+  Upload,
 } from "lucide-react";
 import { cn } from "../../lib/utils";
 
@@ -160,25 +163,31 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       const confirmedMap: Record<number, boolean> = {};
       const dbTexts: Record<number, string> = {};
 
-      // ─── Stale-attachment guard (Task 2, v0.4.0) ────────────────
+      // ─── Stale-attachment guard (Task 2, v0.4.0 + Issue 2, v0.4.1) ──
       // Previously this hydrated ANY segment whose segment_index was
       // in range, regardless of language pair or source text — so an
       // AR→EN segment at index 3 could hydrate into an EN→AR session
       // at index 3 if the source happened to be the same length. Now
       // we require:
-      //   1. source_lang + target_lang match the active direction
-      //   2. sourceHash matches the current segment's hash (OR the
-      //      entry has no sourceHash, in which case we conservatively
-      //      DO NOT attach — the user re-translates)
+      //   1. docId matches the active document (Issue 2, v0.4.1) —
+      //      without this, confirming in doc B would hydrate doc A's
+      //      translations into doc B's editor. Legacy entries without
+      //      docId are NOT attached (conservative).
+      //   2. source_lang + target_lang match the active direction
+      //   3. sourceHash matches the current segment's hash
       const sourceLang = isArToEn ? "ar" : "en";
       const targetLang = isArToEn ? "en" : "ar";
+      const activeDocId = useWorkspaceStore.getState().currentDocId;
 
       for (const entry of dbEntries) {
         if (
           entry.segment_index !== undefined &&
           entry.segment_index < currentSentencesLen &&
           entry.source_lang === sourceLang &&
-          entry.target_lang === targetLang
+          entry.target_lang === targetLang &&
+          // Issue 2: docId must match the active document. If the
+          // entry has no docId (legacy v4), skip it (conservative).
+          activeDocId && entry.docId === activeDocId
         ) {
           // sourceHash check: attach only if the hash matches the
           // current segment's hash. Legacy entries (no sourceHash)
@@ -356,12 +365,18 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       // Audit fix #6: deterministic string id keyed on direction +
       // segment index. Re-confirming an edited segment now upserts
       // (overwrites the prior row) instead of appending a duplicate.
-      // The id format is "{sourceLang}-{targetLang}-{idx}" which is
-      // unique per (direction, segment) pair — switching direction
-      // produces different ids, which is correct because an AR→EN
-      // segment-3 confirmation is a different translation from an
-      // EN→AR segment-3 confirmation.
-      const segmentId = `${sourceLang}-${targetLang}-${idx}`;
+      //
+      // Issue 2 (v0.4.1): the id now includes docId so confirming a
+      // segment in document B doesn't overwrite document A's saved
+      // translation (the old format `{sourceLang}-{targetLang}-{idx}`
+      // collided across documents in the same language pair). The new
+      // format is `{docId}:{sourceLang}-{targetLang}-{idx}`. If docId
+      // is null (legacy state), fall back to the old format for
+      // backward compatibility.
+      const docId = useWorkspaceStore.getState().currentDocId;
+      const segmentId = docId
+        ? `${docId}:${sourceLang}-${targetLang}-${idx}`
+        : `${sourceLang}-${targetLang}-${idx}`;
 
       const newEntry: SegmentEntry = {
         id: segmentId,
@@ -376,6 +391,9 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
         // refuse to re-attach this translation to different source
         // text. See src/lib/segmentation/types.ts fnv1aHex.
         sourceHash: segmentSourceHashes[idx],
+        // Issue 2 (v0.4.1): persist docId so hydration can filter by
+        // document + cross-document overwrites can't happen.
+        docId: docId || undefined,
       };
 
       await putToStore("segments", newEntry);
@@ -423,33 +441,134 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     URL.revokeObjectURL(url);
   };
 
+  // ─── DOCX export (Issue 3, v0.4.1) ──────────────────────────────
+  // Exports the source/target segment pairs as a .docx file. The
+  // target paragraphs are right-aligned for Arabic (RTL) and left-
+  // aligned for English (LTR). Uses the `docx` library.
+  const handleExportDocx = async () => {
+    if (sentences.length === 0) {
+      showToast(isRTL ? "لا يوجد نص للتصدير" : "Nothing to export", "warning");
+      return;
+    }
+    try {
+      const { buildDocxBlob } = await import("../../lib/export-import");
+      const docName = useWorkspaceStore.getState().currentDocName || "RDAT_Translation";
+      const blob = await buildDocxBlob({
+        title: docName,
+        sourceLangLabel: isArToEn ? "Arabic" : "English",
+        targetLangLabel: isArToEn ? "English" : "Arabic",
+        segments: sentences.map((s, i) => ({ source: s, target: targetTexts[i] || "" })),
+        isTargetRTL: !isArToEn, // target is Arabic for EN→AR
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `${docName.replace(/[^\w\u0600-\u06FF-]/g, "_")}.docx`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast(isRTL ? "تم تصدير ملف Word" : "DOCX exported", "success");
+    } catch (e: any) {
+      console.error("[Export DOCX] failed:", e);
+      showToast(isRTL ? `فشل تصدير Word: ${e.message}` : `DOCX export failed: ${e.message}`, "error");
+    }
+  };
+
+  // ─── JSON backup / restore (Issue 3, v0.4.1) ────────────────────
+  // Full dump of segments + glossary + documents to a single JSON
+  // file. Restore re-inserts all entries (upsert by id). This is the
+  // only way to recover from a browser data eviction.
+  const handleExportJsonBackup = async () => {
+    try {
+      const { buildJsonBackup, serializeJsonBackup } = await import("../../lib/export-import");
+      const pkg = await import("../../../package.json");
+      const [segments, glossary, documents] = await Promise.all([
+        getAllofStore<SegmentEntry>("segments"),
+        getAllofStore<GlossaryEntry>("glossary"),
+        getAllofStore<DocumentMeta>("documents"),
+      ]);
+      const backup = buildJsonBackup(segments, glossary, documents, pkg.version);
+      const json = serializeJsonBackup(backup);
+      const blob = new Blob([json], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `RDAT_Backup_${new Date().toISOString().slice(0, 10)}.json`;
+      link.click();
+      URL.revokeObjectURL(url);
+      showToast(
+        isRTL
+          ? `تم تصدير النسخة الاحتياطية (${segments.length} مقطع، ${glossary.length} مصطلح)`
+          : `Backup exported (${segments.length} segments, ${glossary.length} glossary entries)`,
+        "success"
+      );
+    } catch (e: any) {
+      console.error("[Export JSON] failed:", e);
+      showToast(isRTL ? `فشل تصدير النسخة الاحتياطية: ${e.message}` : `Backup export failed: ${e.message}`, "error");
+    }
+  };
+
+  const handleImportJsonBackup = async (file: File) => {
+    try {
+      const text = await file.text();
+      const { parseJsonBackup } = await import("../../lib/export-import");
+      const backup = parseJsonBackup(text);
+      // Re-insert all entries (upsert by id). putBatchToStore handles
+      // the bulk insert.
+      const { putBatchToStore } = await import("../../lib/dual-storage");
+      if (backup.segments.length > 0) await putBatchToStore("segments", backup.segments);
+      if (backup.glossary.length > 0) await putBatchToStore("glossary", backup.glossary);
+      if (backup.documents.length > 0) await putBatchToStore("documents", backup.documents);
+      await refreshCounts();
+      // Re-hydrate the current document if it was in the backup
+      initialLoadDoneRef.current = false;
+      prevSentencesLenRef.current = -1;
+      showToast(
+        isRTL
+          ? `تم استيراد النسخة الاحتياطية (${backup.segments.length} مقطع، ${backup.glossary.length} مصطلح)`
+          : `Backup restored (${backup.segments.length} segments, ${backup.glossary.length} glossary entries)`,
+        "success"
+      );
+    } catch (e: any) {
+      console.error("[Import JSON] failed:", e);
+      showToast(isRTL ? `فشل استيراد النسخة الاحتياطية: ${e.message}` : `Backup restore failed: ${e.message}`, "error");
+    }
+  };
+  const jsonBackupInputRef = useRef<HTMLInputElement>(null);
+
   // ─── Clear text (Task 1b, v0.4.0) ────────────────────────────────
   // Clears: sourceText, targetTexts, currentSegmentIndex, segmentation
   // state, manual split/merge overrides. Aborts in-flight LLM/Gemini
   // requests (via clearPrefetchCache + the TargetEditor effect that
   // resets on segment-count change). If the checkbox is checked, also
-  // deletes saved translations for the ACTIVE language pair only.
-  // Glossary, TM, and settings are never touched.
+  // deletes saved translations for the ACTIVE document only (Issue 2,
+  // v0.4.1: scoped by docId, not language pair — so clearing doc B
+  // never touches doc A's saved work). Glossary, TM, and settings are
+  // never touched.
   const handleClearText = async () => {
-    const sourceLang = isArToEn ? "ar" : "en";
-    const targetLang = isArToEn ? "en" : "ar";
+    const activeDocId = useWorkspaceStore.getState().currentDocId;
 
     // 1. Clear prefetch/ghost caches (aborts stale suggestions)
     clearPrefetchCache();
 
-    // 2. Optionally delete saved translations for this language pair
-    if (clearAlsoSaved) {
+    // 2. Optionally delete saved translations for the active document.
+    // Issue 2 (v0.4.1): scoped by docId (was: by language pair). This
+    // is the key fix — the old scope wiped OTHER documents in the same
+    // language pair. Now only the active document's segments are deleted.
+    if (clearAlsoSaved && activeDocId) {
       try {
         const allEntries = await getAllofStore<SegmentEntry>("segments");
-        const toDelete = allEntries.filter(
-          (e) => e.source_lang === sourceLang && e.target_lang === targetLang
-        );
-        // Delete each by its id. We don't use clearStore("segments")
-        // because that would wipe ALL language pairs.
+        const toDelete = allEntries.filter((e) => e.docId === activeDocId);
         for (const entry of toDelete) {
           if (entry.id !== undefined) {
             await deleteFromStore("segments", entry.id);
           }
+        }
+        // Also delete the document metadata row
+        try {
+          await deleteFromStore("documents", activeDocId);
+        } catch {
+          // Non-fatal — the document row may not exist if the user
+          // never imported via the file picker (pasted text).
         }
       } catch (e) {
         console.warn("[ClearText] Failed to delete saved segments:", e);
@@ -476,10 +595,10 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     showToast(
       isRTL
         ? clearAlsoSaved
-          ? "تم مسح النص والترجمات المحفوظة لهذا الاتجاه"
+          ? "تم مسح النص والترجمات المحفوظة لهذا المستند"
           : "تم مسح النص (مع الاحتفاظ بالترجمات المحفوظة)"
         : clearAlsoSaved
-          ? "Cleared text and saved translations for this direction"
+          ? "Cleared text and saved translations for this document"
           : "Cleared text (saved translations kept)",
       "success"
     );
@@ -709,10 +828,53 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
             <button
               onClick={handleExportArabicTranslation}
               className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "تصدير نصي" : "Export as TXT"}
             >
               <Download className="w-3.5 h-3.5" />
               <span>{isRTL ? "تصدير الملف" : "Export TXT"}</span>
             </button>
+
+            {/* Issue 3 (v0.4.1): DOCX export + JSON backup/restore.
+                The only export before was TXT; IndexedDB was the only
+                copy. Now users can export to Word, back up everything,
+                and restore after a data eviction. */}
+            <button
+              onClick={handleExportDocx}
+              className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "تصدير ملف Word" : "Export as DOCX (Word)"}
+            >
+              <FileText className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isRTL ? "Word" : "DOCX"}</span>
+            </button>
+
+            <button
+              onClick={handleExportJsonBackup}
+              className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "نسخة احتياطية كاملة (JSON)" : "Full backup (JSON)"}
+            >
+              <Save className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isRTL ? "نسخة احتياطية" : "Backup"}</span>
+            </button>
+
+            <button
+              onClick={() => jsonBackupInputRef.current?.click()}
+              className="flex items-center gap-1 hover:text-primary text-[10.5px] text-muted-foreground cursor-pointer transition-colors"
+              title={isRTL ? "استيراد نسخة احتياطية (JSON)" : "Restore from backup (JSON)"}
+            >
+              <Upload className="w-3.5 h-3.5" />
+              <span className="hidden sm:inline">{isRTL ? "استعادة" : "Restore"}</span>
+            </button>
+            <input
+              type="file"
+              ref={jsonBackupInputRef}
+              accept=".json"
+              className="hidden"
+              onChange={(e) => {
+                const files = e.target.files;
+                if (files && files.length > 0) handleImportJsonBackup(files[0]);
+                e.target.value = "";
+              }}
+            />
           </div>
         </div>
 
@@ -1031,12 +1193,12 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
               />
               <span className="text-xs text-foreground leading-relaxed">
                 {isRTL
-                  ? "حذف الترجمات المحفوظة لهذا الزوج اللغوي أيضًا"
-                  : "Also delete saved translations for this language pair"}
+                  ? "حذف الترجمات المحفوظة لهذا المستند أيضًا"
+                  : "Also delete saved translations for this document"}
                 <span className="block text-[10px] text-muted-foreground mt-0.5">
                   {isRTL
-                    ? "فقط للاتجاه النشط. القاموس والذاكرة والإعدادات لا تُمسح."
-                    : "Active direction only. Glossary, TM, and settings are never touched."}
+                    ? "فقط للمستند النشط. القاموس والذاكرة والإعدادات لا تُمسح."
+                    : "Active document only. Glossary, TM, and settings are never touched."}
                 </span>
               </span>
             </label>

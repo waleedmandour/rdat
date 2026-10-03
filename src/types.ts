@@ -58,15 +58,17 @@ export interface GlossaryEntry {
 export interface SegmentEntry {
   /**
    * Audit fix #6: id is now `number | string`. Confirmed segments use
-   * a deterministic string id ("{sourceLang}-{targetLang}-{idx}") so
-   * re-confirming an edited segment upserts instead of duplicating.
-   * The DB schema was bumped to v3 to drop the old autoIncrement-int
-   * segments store and recreate with this mixed-key schema.
+   * a deterministic string id so re-confirming an edited segment
+   * upserts instead of duplicating.
    *
    * Task 2 (v0.4.0): `sourceHash` was added (DB v4, additive index).
-   * The hydration path refuses to re-attach a saved translation to a
-   * different source text by comparing this hash. Old v3 entries
-   * without `sourceHash` are treated as "do not attach" (conservative).
+   *
+   * Issue 2 (v0.4.1): `docId` was added (DB v5, additive index). The
+   * id format is now `{docId}:{sourceLang}-{targetLang}:{idx}` (was
+   * `{sourceLang}-{targetLang}-{idx}`) so confirming a segment in
+   * document B no longer overwrites document A's saved translation.
+   * Legacy v4 entries without `docId` are NOT attached by hydration
+   * (conservative — the user re-translates).
    */
   id: number | string;
   source: string;
@@ -84,12 +86,39 @@ export interface SegmentEntry {
    * attach"). See src/lib/segmentation/types.ts fnv1aHex.
    */
   sourceHash?: string;
+  /**
+   * Document/project id (Issue 2, v0.4.1). Groups segments by document
+   * so cross-document overwrites can't happen. Undefined on legacy v4
+   * entries (treated as "do not attach"). See src/stores/workspace-store.ts
+   * currentDocId.
+   */
+  docId?: string;
   created_at?: string;
   updated_at?: string;
   _pendingSync?: boolean;
 }
 
-export type StoreName = "tm_entries" | "glossary" | "segments" | "sync_meta";
+/**
+ * Document/project metadata (Issue 2, v0.4.1). Stored in the `documents`
+ * object store (DB v5). One row per imported document. Used by a future
+ * document-manager UI (list, switch, rename, delete). For now, the
+ * workspace tracks the active docId + name; this store persists them so
+ * a document can be re-opened after a reload.
+ */
+export interface DocumentMeta {
+  /** UUID (crypto.randomUUID()). */
+  id: string;
+  /** Display name (usually the imported filename, or "Pasted text"). */
+  name: string;
+  source_lang: string;
+  target_lang: string;
+  /** Number of segments at import time (for display). */
+  segment_count: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export type StoreName = "tm_entries" | "glossary" | "segments" | "sync_meta" | "documents";
 
 export type NavItem = "translator" | "glossary" | "models" | "api-keys" | "settings";
 

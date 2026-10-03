@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { useLanguage } from "../context/LanguageContext";
 import { useSettingsStore } from "../stores/settings-store";
-import { Key, Eye, EyeOff, CheckCircle2 } from "lucide-react";
+import { DEFAULT_GEMINI_MODEL } from "../lib/gemini-config";
+import { Key, Eye, EyeOff, CheckCircle2, Cpu } from "lucide-react";
 
 export function ApiKeysView() {
   const { locale, t } = useLanguage();
@@ -14,6 +15,8 @@ export function ApiKeysView() {
     setRememberApiKey,
     useCloudFallback,
     setUseCloudFallback,
+    geminiModel,
+    setGeminiModel,
   } = useSettingsStore();
 
   const [showKey, setShowKey] = useState(false);
@@ -84,6 +87,39 @@ export function ApiKeysView() {
                 )}
               </button>
             )}
+          </div>
+
+          {/* Gemini model ID (Issue 1, v0.4.1) — configurable so a model
+              retirement doesn't break Tier 2 + AI Tutor. Default is the
+              latest stable Flash model. */}
+          <div className="pt-3 border-t border-border/40 space-y-2">
+            <div className="flex items-center gap-2">
+              <Cpu className="w-3.5 h-3.5 text-primary" />
+              <label htmlFor="gemini-model-input" className="text-xs font-bold text-foreground">
+                {isRTL ? "معرّف نموذج Gemini" : "Gemini Model ID"}
+              </label>
+            </div>
+            <input
+              id="gemini-model-input"
+              type="text"
+              value={geminiModel}
+              onChange={(e) => setGeminiModel(e.target.value)}
+              placeholder={DEFAULT_GEMINI_MODEL}
+              className="w-full bg-background border border-border rounded-lg px-3 py-2 text-xs font-mono text-foreground focus:outline-none focus:ring-1 focus:ring-primary/40 focus:border-primary/50"
+            />
+            <p className="text-[10.5px] text-muted-foreground leading-relaxed">
+              {isRTL
+                ? `المعرّف الافتراضي هو ${DEFAULT_GEMINI_MODEL} (أحدث نموذج Flash مستقر). اطّلع على النماذج المتاحة وأوقات الإيقاف على توثيق Google. في وضع PWA، يمكن تجاوز هذا عبر متغير البيئة GEMINI_MODEL.`
+                : `Default is ${DEFAULT_GEMINI_MODEL} (the latest stable Flash model). See Google's models + deprecations docs for available IDs. In PWA mode, this can be overridden via the GEMINI_MODEL env var.`}
+            </p>
+            <a
+              href="https://ai.google.dev/gemini-api/docs/deprecations"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-[10.5px] text-primary hover:underline"
+            >
+              {isRTL ? "تحقق من جدول الإيقاف ←" : "Check the deprecations table →"}
+            </a>
           </div>
 
           {/* Cloud fallback switch */}

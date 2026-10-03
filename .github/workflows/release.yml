@@ -51,6 +51,10 @@ jobs:
       - run: npx tsx scripts/test-segmentation.ts
       - run: npx tsx scripts/test-ghost-gate.ts
       - run: npx tsx scripts/test-webllm-catalog.ts
+      # v0.4.1 smoke tests
+      - run: npx tsx scripts/test-gemini-model-config.ts
+      - run: npx tsx scripts/test-doc-id.ts
+      - run: npx tsx scripts/test-export.ts
       - run: npm run build
 
   # ─────────────────────────────────────────────────────────────────
