@@ -17,6 +17,7 @@ import { useWorkspaceStore } from "../../stores/workspace-store";
 import { useUIStore } from "../../stores/ui-store";
 import { useEditorActivityStore } from "../../stores/editor-activity-store";
 import { useToast } from "../../context/ToastContext";
+import { isGhostGateOpen } from "../../lib/ghost-gate";
 import {
   Sparkles,
   HelpCircle,
@@ -163,6 +164,24 @@ export function TargetEditor({
   useEffect(() => { loadedModelRef.current = loadedModel; }, [loadedModel]);
   useEffect(() => { isRTLRef.current = isRTL; }, [isRTL]);
 
+  // ─── Ghost-gate (Task 3, v0.4.0) ────────────────────────────────
+  // DISPLAY-ONLY gate: background generation (prefetch + LLM requests)
+  // still runs, but ghost text is not shown until the user has entered
+  // their first meaningful characters in this target segment.
+  //
+  // The gate is a pure, stateless derivation from `translationText` —
+  // no stored flag, so restored/saved translations, paste, undo/redo,
+  // segment navigation, and Arabic/IME input all behave correctly. If
+  // the segment returns to empty (after stripping whitespace/bidi/
+  // tatweel), the gate closes and any visible ghost text disappears.
+  //
+  // `displayedGhostSuggestion` is what the JSX renders. When the gate
+  // is closed, it's "" — so Tab/Alt+]/Ctrl+Right in handleKeyDown see
+  // no suggestion and fall through (Tab is never trapped). The tier
+  // badge and aria-live are also gated.
+  const gateOpen = isGhostGateOpen(translationText);
+  const displayedGhostSuggestion = gateOpen ? ghostSuggestion : "";
+
   const fetchSuggestions = useCallback(async (typedText: string) => {
     // ════════════════════════════════════════════════════════════════
     // Phase 3: Simplified 2-tier ghost-text pipeline
@@ -187,7 +206,7 @@ export function TargetEditor({
     // ════════════════════════════════════════════════════════════════
 
     // ── TIER 0: Prefetch Cache + LTE (instant, 0ms) ──
-    const cachedTranslation = getPrefetch(sourceText);
+    const cachedTranslation = getPrefetch(sourceText, direction);
     if (cachedTranslation) {
       const remainder = computeGhostRemainder(typedText, cachedTranslation);
       if (remainder.trim()) {
@@ -459,7 +478,7 @@ export function TargetEditor({
           }).then((candidates) => {
             if (candidates.length > 0 && candidates[0].trim()) {
               // Cache the result so the first keystroke gets instant ghost text
-              cachePrefetch(sourceText, candidates[0]);
+              cachePrefetch(sourceText, candidates[0], direction);
               console.log("[TargetEditor] Prefetch complete:", candidates[0].substring(0, 60));
             }
           }).catch(() => {});
@@ -521,35 +540,39 @@ export function TargetEditor({
   }, [isActive, translationText, fetchSuggestions, sourceText]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Tab" && ghostSuggestion) {
+    // Task 3: use displayedGhostSuggestion (gate-aware) so that when
+    // the gate is closed, Tab/Alt+]/Ctrl+Right behave as "no
+    // suggestion" — Tab falls through (never trapped), Alt+] is a
+    // no-op, Ctrl+Right is a no-op.
+    if (e.key === "Tab" && displayedGhostSuggestion) {
       e.preventDefault();
       justAcceptedRef.current = true;
-      onChange(translationText + ghostSuggestion);
+      onChange(translationText + displayedGhostSuggestion);
       setGhostSuggestion("");
       setSuggestionCandidates([]);
       return;
     }
 
-    if (e.key === "ArrowRight" && e.ctrlKey && ghostSuggestion) {
+    if (e.key === "ArrowRight" && e.ctrlKey && displayedGhostSuggestion) {
       e.preventDefault();
-      const trimmedSuggestion = ghostSuggestion.trimStart();
+      const trimmedSuggestion = displayedGhostSuggestion.trimStart();
       const firstSpaceIdx = trimmedSuggestion.indexOf(" ");
       let nextPortion = "";
       if (firstSpaceIdx === -1) {
-        nextPortion = ghostSuggestion;
+        nextPortion = displayedGhostSuggestion;
       } else {
-        const leadingSpacesCount = ghostSuggestion.length - trimmedSuggestion.length;
-        nextPortion = ghostSuggestion.substring(0, leadingSpacesCount + firstSpaceIdx + 1);
+        const leadingSpacesCount = displayedGhostSuggestion.length - trimmedSuggestion.length;
+        nextPortion = displayedGhostSuggestion.substring(0, leadingSpacesCount + firstSpaceIdx + 1);
       }
       justAcceptedRef.current = true;
       onChange(translationText + nextPortion);
-      const remainingGhost = ghostSuggestion.substring(nextPortion.length);
+      const remainingGhost = displayedGhostSuggestion.substring(nextPortion.length);
       setGhostSuggestion(remainingGhost.trim() ? remainingGhost : "");
       if (!remainingGhost.trim()) setSuggestionCandidates([]);
       return;
     }
 
-    if (e.key === "]" && e.altKey && suggestionCandidates.length > 1) {
+    if (e.key === "]" && e.altKey && suggestionCandidates.length > 1 && gateOpen) {
       e.preventDefault();
       const nextIdx = (candidateIndex + 1) % suggestionCandidates.length;
       setCandidateIndex(nextIdx);
@@ -651,10 +674,26 @@ export function TargetEditor({
           className={cn("w-full bg-background/50 border dark:border-white/10 border-border/80 rounded-xl p-4 text-sm md:text-base text-foreground focus:outline-none focus:border-primary/50 font-medium leading-relaxed resize-none transition-all", isTargetRTL ? "text-right" : "text-left")}
         />
 
-        {ghostSuggestion && isActive && (
+        {/*
+          Ghost-text chip + tier badge (Task 3: gated).
+          When the ghost-gate is closed (user hasn't typed meaningful
+          chars yet), displayedGhostSuggestion is "" so this block
+          doesn't render. The tier badge is inside the same block so
+          it's also hidden. aria-live is gated too — no announcement
+          until the gate opens. The tierError block below is NOT
+          gated (per the brief: "existing tier-error hints … stay as
+          they are").
+        */}
+        {displayedGhostSuggestion && isActive && (
           <div
             className="absolute bottom-3 left-4 pointer-events-none select-none text-[10px] font-mono text-primary/40 bg-primary/5 border border-primary/20 px-2.5 py-0.5 rounded-md flex items-center gap-1.5"
             dir={isRTL ? "rtl" : "ltr"}
+            aria-live="polite"
+            aria-label={
+              isRTL
+                ? `اقتراح: ${displayedGhostSuggestion}`
+                : `Suggestion: ${displayedGhostSuggestion}`
+            }
           >
             <Sparkles className="w-3.5 h-3.5 text-primary animate-pulse" />
             <span>[Tab] {isRTL ? "إتمام تلقائي" : "Auto-complete"} (
@@ -670,12 +709,12 @@ export function TargetEditor({
                 )}
                 {tierSource === "gemini" && (isRTL ? "سحابي" : "GEMINI")}
               </span>
-            ): {ghostSuggestion}</span>
+            ): {displayedGhostSuggestion}</span>
           </div>
         )}
       </div>
 
-      {isActive && !ghostSuggestion && tierError && (
+      {isActive && !displayedGhostSuggestion && tierError && (
         <div
           className={cn(
             "mt-1 p-3 rounded-lg border text-[11px] flex items-start gap-2",
@@ -725,11 +764,11 @@ export function TargetEditor({
       {isActive && (
         <div className="flex flex-wrap items-center justify-between pt-3 border-t dark:border-white/5 border-border/40 text-[10px] text-muted-foreground leading-loose" dir={isRTL ? "rtl" : "ltr"}>
           
-          {suggestionCandidates.length > 0 ? (
+          {(gateOpen && suggestionCandidates.length > 0) ? (
             <div className="flex items-center gap-1.5 text-primary">
               <Sparkles className="w-3.5 h-3.5" />
               <span>
-                {isRTL 
+                {isRTL
                   ? `اضغط [Tab] للقبول أو Alt + ] للتنقل`
                   : `Press [Tab] to accept ghost translation | Alt + ] to cycle`}
               </span>
@@ -742,7 +781,7 @@ export function TargetEditor({
           )}
 
           <div className="flex items-center gap-3">
-            {suggestionCandidates.length > 0 && (
+            {gateOpen && suggestionCandidates.length > 0 && (
               <div className="px-2 py-0.5 dark:bg-white/10 bg-primary/10 rounded text-[9px] text-primary font-mono tracking-tighter">
                 {isRTL ? "مطابقة" : "MATCH"} 94%
               </div>

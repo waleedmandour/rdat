@@ -79,12 +79,28 @@ export function getLastLLMError(): string | null {
 // and cache it. The ghost-text system then compares the user's typed
 // prefix against this cached translation to instantly produce a
 // suggestion remainder — no LLM call needed until the user deviates.
+//
+// Task 3 (v0.4.0): the cache key now includes `direction` so that a
+// direction switch cannot leak a stale suggestion from the other
+// language pair. Previously the key was `sourceText.trim().toLowerCase()`
+// only, which meant an EN→AR prefetch would be returned for an AR→EN
+// query on the same source text. The `clearPrefetchCache()` call on
+// direction switch (in TranslationWorkspace) is belt-and-suspenders;
+// the key change makes it correct even if that call is ever removed.
 const prefetchCache = new Map<string, { translation: string; timestamp: number }>();
 const PREFETCH_TTL_MS = 120_000; // Cache entries expire after 2 minutes
 
+function prefetchKey(sourceText: string, direction: TranslationDirection): string {
+  return `${direction}::${sourceText.trim().toLowerCase()}`;
+}
+
 /** Store a prefetched translation in the cache. */
-export function cachePrefetch(sourceText: string, translation: string): void {
-  prefetchCache.set(sourceText.trim().toLowerCase(), {
+export function cachePrefetch(
+  sourceText: string,
+  translation: string,
+  direction: TranslationDirection = "en-ar"
+): void {
+  prefetchCache.set(prefetchKey(sourceText, direction), {
     translation,
     timestamp: Date.now(),
   });
@@ -98,11 +114,15 @@ export function cachePrefetch(sourceText: string, translation: string): void {
 }
 
 /** Retrieve a cached prefetch translation, or null if not found/expired. */
-export function getPrefetch(sourceText: string): string | null {
-  const entry = prefetchCache.get(sourceText.trim().toLowerCase());
+export function getPrefetch(
+  sourceText: string,
+  direction: TranslationDirection = "en-ar"
+): string | null {
+  const key = prefetchKey(sourceText, direction);
+  const entry = prefetchCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > PREFETCH_TTL_MS) {
-    prefetchCache.delete(sourceText.trim().toLowerCase());
+    prefetchCache.delete(key);
     return null;
   }
   return entry.translation;
@@ -369,7 +389,7 @@ export async function generateRAGTranslation(
 
     // Cache the best candidate in the prefetch cache
     if (candidates.length > 0) {
-      cachePrefetch(sourceText, candidates[0]);
+      cachePrefetch(sourceText, candidates[0], direction);
     }
 
     return candidates;
@@ -401,7 +421,7 @@ export async function prefetchTranslation(
   direction: TranslationDirection = "en-ar"
 ): Promise<string | null> {
   // Check prefetch cache first
-  const cached = getPrefetch(sourceText);
+  const cached = getPrefetch(sourceText, direction);
   if (cached) {
     console.log("[LocalLLM] Prefetch cache hit for segment.");
     return cached;
@@ -412,7 +432,7 @@ export async function prefetchTranslation(
   if (lte.getStats().entries > 0) {
     const lteResult = lte.getSuggestion(sourceText, "", direction);
     if (lteResult && lteResult.match) {
-      cachePrefetch(sourceText, lteResult.match);
+      cachePrefetch(sourceText, lteResult.match, direction);
       return lteResult.match;
     }
   }
