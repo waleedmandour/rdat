@@ -122,7 +122,7 @@ export interface LLMAdapter {
    *   - WebLLM: returns the static catalog from MODEL_MAP.
    *   - Ollama: queries the daemon's `/api/tags` endpoint for installed models.
    */
-  listModels(): Promise<ModelInfo[]>;
+  listModels(showAll?: boolean): Promise<ModelInfo[]>;
   /**
    * Download / pull a model so it can be loaded later.
    *   - WebLLM: no-op (models are downloaded on `loadModel`).

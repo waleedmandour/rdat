@@ -45,7 +45,9 @@ check("HIDDEN_MODEL_PREFIXES includes llava", ollamaSrc.includes('"llava"'));
 check("HIDDEN_MODEL_PREFIXES includes codellama", ollamaSrc.includes('"codellama"'));
 check("HIDDEN_MODEL_PREFIXES includes mxbai-embed", ollamaSrc.includes('"mxbai-embed"'));
 check("isHiddenModel function exists", /function isHiddenModel/.test(ollamaSrc));
-check("listModels uses isHiddenModel filter", /visibleInstalled\s*=\s*installed\.filter\(\s*\(m\)\s*=>\s*!isHiddenModel/.test(ollamaSrc));
+check("listModels uses isHiddenModel filter", /visibleInstalled\s*=\s*installed\.filter\(/.test(ollamaSrc));
+check("listModels supports showAll parameter", /async listModels\(showAll: boolean = false\)/.test(ollamaSrc));
+check("listModels never hides loaded model", /m\.name === loadedModel/.test(ollamaSrc));
 
 console.log("\n── HTTP backend for PWA mode ──");
 

@@ -111,7 +111,7 @@ export class WebLLMAdapter implements LLMAdapter {
 
   // ── Model Catalog ──
 
-  async listModels(): Promise<ModelInfo[]> {
+  async listModels(_showAll?: boolean): Promise<ModelInfo[]> {
     const engine = await getEngine();
     const result: ModelInfo[] = [];
     for (const entry of MODELS) {

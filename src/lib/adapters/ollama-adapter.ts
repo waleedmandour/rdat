@@ -44,6 +44,7 @@ import type {
 } from "../llm-adapter";
 import { buildRAGSystemPrompt, buildUserPrompt } from "../llm-adapter";
 import { useWorkspaceStore } from "../../stores/workspace-store";
+import { useSettingsStore } from "../../stores/settings-store";
 
 // ─── Tauri Detection ──────────────────────────────────────────────
 // We check for Tauri's runtime global. This avoids importing
@@ -433,8 +434,9 @@ export class OllamaAdapter implements LLMAdapter {
 
   // ── Model Catalog ──
 
-  async listModels(): Promise<ModelInfo[]> {
+  async listModels(showAll: boolean = false): Promise<ModelInfo[]> {
     // v0.4.2: in PWA mode, use the HTTP backend.
+    // v0.4.3: showAll parameter bypasses the hidden-model filter.
     let installed: Array<{ name: string; size: number; digest: string }> = [];
     try {
       if (isTauriEnvironment()) {
@@ -455,7 +457,12 @@ export class OllamaAdapter implements LLMAdapter {
     // v0.4.2: filter out non-translation models (embedding, vision, code)
     // so the panel stays focused. The user can still pull them via
     // Ollama directly; we just don't show them in RDAT.
-    const visibleInstalled = installed.filter((m) => !isHiddenModel(m.name));
+    // v0.4.3: showAll=true bypasses the filter. But we NEVER hide a model
+    // the user has loaded or selected (loadedModelId).
+    const loadedModel = useSettingsStore.getState().loadedModel;
+    const visibleInstalled = installed.filter((m) =>
+      showAll || !isHiddenModel(m.name) || m.name === loadedModel
+    );
 
     // Merge installed models with the recommended catalog so the UI
     // shows both "what you have" and "what you can install".

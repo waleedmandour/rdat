@@ -77,6 +77,9 @@ export function AiModelsView() {
   const [loadingProgress, setLoadingProgress] = useState<number>(0);
   const [pullingModelId, setPullingModelId] = useState<string | null>(null);
   const [pullProgress, setPullProgress] = useState<number>(0);
+  // v0.4.3: "Show all" toggle for the model catalog. When on, hidden
+  // models (embedding, vision, code) are also shown. Default off.
+  const [showAllModels, setShowAllModels] = useState(false);
 
   // ─── Hardware Specs (for display) ────────────────────────────────
   const [cpuCores, setCpuCores] = useState<number>(4);
@@ -134,7 +137,7 @@ export function AiModelsView() {
 
           // Load model list
           try {
-            const modelList = await activeAdapter.listModels();
+            const modelList = await activeAdapter.listModels(showAllModels);
             if (cancelled) return;
             setModels(modelList);
           } catch (e: any) {
@@ -228,7 +231,7 @@ export function AiModelsView() {
 
     if (activeAdapter) {
       try {
-        const modelList = await activeAdapter.listModels();
+        const modelList = await activeAdapter.listModels(showAllModels);
         setModels(modelList);
         const healthy = await activeAdapter.isAvailable();
         setDaemonHealthy(healthy);
@@ -544,13 +547,30 @@ export function AiModelsView() {
               <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground">
                 {isRTL ? "كتالوج النماذج" : "Model Catalog"}
               </h3>
-              <button
-                onClick={refreshModels}
-                className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
-              >
-                <RefreshCw className="w-3 h-3" />
-                {isRTL ? "تحديث" : "Refresh"}
-              </button>
+              <div className="flex items-center gap-3">
+                {/* v0.4.3: Show all models toggle (bypasses the hidden-model filter) */}
+                {adapter.id === "ollama" && (
+                  <label className="flex items-center gap-1 text-[10px] text-muted-foreground cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={showAllModels}
+                      onChange={(e) => {
+                        setShowAllModels(e.target.checked);
+                        setTimeout(() => refreshModels(), 0);
+                      }}
+                      className="w-3 h-3 accent-primary"
+                    />
+                    {isRTL ? "إظهار الكل" : "Show all"}
+                  </label>
+                )}
+                <button
+                  onClick={refreshModels}
+                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1 cursor-pointer"
+                >
+                  <RefreshCw className="w-3 h-3" />
+                  {isRTL ? "تحديث" : "Refresh"}
+                </button>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
