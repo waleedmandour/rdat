@@ -32,7 +32,7 @@ Both paths run the **same React frontend**. The runtime environment detects whic
 - **Primary engine:** Local LLM
   - In Tauri mode: Ollama (native CUDA/Metal acceleration, supports Gemma 4 / Qwen 3 / Llama 4)
   - In PWA mode: WebLLM (WebGPU-accelerated, q4f16_1 quantization)
-- **Secondary engine:** Cloud Gemini 2.5 Flash
+- **Secondary engine:** Cloud Gemini (default: 3.8 Flash, configurable)
   - Used as fallback when the local LLM is unavailable, no model is loaded, or the local tier fails
   - Also used for the AI Translation Tutor (separate pedagogical feature, not part of the ghost-text pipeline)
 
@@ -209,7 +209,7 @@ The ghost-text pipeline (`fetchSuggestions` in `TargetEditor.tsx`) consults tier
   - PWA proxy: `api/translate/burst.ts` (Vercel function with `@google/genai`)
 - **Latency:** 500 - 3000 ms
 - **Channel badge:** `gemini` (amber)
-- **Model:** `gemini-2.5-flash`
+- **Model:** `gemini-3.8-flash` (default; user-configurable in API Keys; `GEMINI_MODEL` env var for Vercel)
 - **Output:** Up to 3 candidate completions (JSON-structured response)
 
 **Retry policy:** Up to 2 retries with exponential backoff (500 ms, then 1500 ms) on network failures and 5xx errors. Non-retryable errors (4xx, missing API key) fail immediately.
@@ -657,7 +657,7 @@ The storage layer (`src/lib/dual-storage.ts`) provides `putToStore`, `putBatchTo
 |---|---|---|---|
 | Primary Local LLM (Tauri) | Ollama | daemon | Gemma 4 / Qwen 2.5 / Qwen 3 / Llama 3.1 |
 | Browser Local LLM (PWA) | @mlc-ai/web-llm | 0.2.84 | WebGPU-accelerated inference |
-| Cloud AI | @google/genai | 2.4.0 | Gemini 2.5 Flash |
+| Cloud AI | @google/genai | 2.4.0 | Gemini (default: 3.8 Flash, configurable) |
 | Cloud Proxy (Tauri) | Rust `gemini_translate` command | - | reqwest to Gemini REST API |
 | Cloud Proxy (PWA) | Vercel Serverless Functions | Node 22.x | @google/genai SDK |
 

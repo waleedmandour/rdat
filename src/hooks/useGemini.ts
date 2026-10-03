@@ -8,6 +8,7 @@ import {
   geminiTutor,
   RetryableError,
   FatalError,
+  ModelRetiredError,
 } from "../lib/gemini-direct";
 
 /**
@@ -55,6 +56,13 @@ export function useGemini() {
         return await fn();
       } catch (err: any) {
         lastError = err;
+        // ModelRetiredError (Issue 1, v0.4.1) — don't retry. Retrying a
+        // retired model is pointless; re-throw immediately so the user
+        // sees the actionable "Open API Keys" message without 2s of
+        // backoff delay.
+        if (err instanceof ModelRetiredError) {
+          throw err;
+        }
         // FatalError (4xx) — don't retry, re-throw immediately.
         if (err instanceof FatalError) {
           throw err;

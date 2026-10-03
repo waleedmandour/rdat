@@ -36,7 +36,7 @@ As of v0.4.0, RDAT ships in **two complementary forms**, sharing a single React/
 | **Tauri Desktop App** (Windows, macOS, Linux) | Daily professional use; fastest inference; full offline | ~15 MB app + ~1.5 GB model | Ollama (PRIMARY) |
 | **PWA on Vercel** (browser) | Try-before-install; mobile; locked-down machines | Zero install (browser) | WebLLM via WebGPU (optional) |
 
-The system's primary engine is the **local LLM** (Ollama in desktop mode, WebLLM in browser mode). Gemini 2.5 Flash is a **secondary fallback** for when local tiers yield low confidence, complex passages, or when no local model is available. This local-first architecture ensures data privacy and offline capability: the Local Translation Engine (LTE) and on-device LLM models operate without any network egress, while glossary databases, translation memories, and segment history persist across sessions through IndexedDB.
+The system's primary engine is the **local LLM** (Ollama in desktop mode, WebLLM in browser mode). Gemini (default: **3.8 Flash**, configurable in API Keys) is a **secondary fallback** for when local tiers yield low confidence, complex passages, or when no local model is available. This local-first architecture ensures data privacy and offline capability: the Local Translation Engine (LTE) and on-device LLM models operate without any network egress, while glossary databases, translation memories, and segment history persist across sessions through IndexedDB.
 
 ---
 
@@ -343,7 +343,7 @@ When deployed as a PWA on Vercel, RDAT is a fully installable Progressive Web Ap
 | **Desktop Shell** | **Tauri 2.11.x** (Rust backend with reqwest, tokio, serde) |
 | **Primary Local LLM** | **Ollama** (Gemma 4 E2B default; Qwen 3, Llama 4 also supported) |
 | Browser Local LLM | `@mlc-ai/web-llm` (WebGPU-accelerated, fallback when no Ollama) |
-| Cloud AI | Google Gemini 2.5 Flash |
+| Cloud AI | Google Gemini (default: 3.8 Flash, configurable) |
 | Cloud Proxy (Tauri) | Rust `gemini_translate` command via reqwest to Gemini REST API |
 | Cloud Proxy (PWA) | Vercel Serverless Functions (Node.js 22.x runtime) to `@google/genai` SDK |
 | Document Import | `mammoth` (DOCX text extraction, dynamically imported) |
