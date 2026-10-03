@@ -2,26 +2,26 @@
 
 **Professional Bidirectional English↔Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Version](https://img.shields.io/badge/Version-0.4.1-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.4.1)
+[![Version](https://img.shields.io/badge/Version-0.4.2-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.4.2)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
 [![PWA Ready](https://img.shields.io/badge/PWA-Optional-6366f1?logo=pwa&logoColor=white)](https://github.com/waleedmandour/rdat)
 [![CI](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml/badge.svg)](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml)
 
-### Download v0.4.1
+### Download v0.4.2
 
 | Platform | Artifact | Size |
 |----------|----------|------|
-| **Windows** (x64) | [RDAT.Copilot_0.4.1_x64-setup.exe](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_x64-setup.exe) | ~6 MB |
-| **macOS** (Apple Silicon) | [RDAT.Copilot_0.4.1_aarch64.dmg](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_aarch64.dmg) | ~10 MB |
-| **macOS** (Intel) | [RDAT.Copilot_0.4.1_x64.dmg](https://github.com/waleedmandour/rdat/releases/tag/v0.4.1) | — |
-| **Linux** (.deb) | [RDAT.Copilot_0.4.1_amd64.deb](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_amd64.deb) | ~7 MB |
-| **Linux** (.rpm) | [RDAT.Copilot-0.4.1-1.x86_64.rpm](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot-0.4.1-1.x86_64.rpm) | ~7 MB |
-| **Linux** (.AppImage) | [RDAT.Copilot_0.4.1_amd64.AppImage](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/RDAT.Copilot_0.4.1_amd64.AppImage) | ~84 MB |
-| **PWA** (browser) | [rdat-v0.4.1-pwa.zip](https://github.com/waleedmandour/rdat/releases/download/v0.4.1/rdat-v0.4.1-pwa.zip) | ~4 MB |
+| **Windows** (x64) | [RDAT.Copilot_0.4.2_x64-setup.exe](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_x64-setup.exe) | ~6 MB |
+| **macOS** (Apple Silicon) | [RDAT.Copilot_0.4.2_aarch64.dmg](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_aarch64.dmg) | ~10 MB |
+| **macOS** (Intel) | [RDAT.Copilot_0.4.2_x64.dmg](https://github.com/waleedmandour/rdat/releases/tag/v0.4.2) | — |
+| **Linux** (.deb) | [RDAT.Copilot_0.4.2_amd64.deb](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_amd64.deb) | ~7 MB |
+| **Linux** (.rpm) | [RDAT.Copilot-0.4.2-1.x86_64.rpm](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot-0.4.2-1.x86_64.rpm) | ~7 MB |
+| **Linux** (.AppImage) | [RDAT.Copilot_0.4.2_amd64.AppImage](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_amd64.AppImage) | ~84 MB |
+| **PWA** (browser) | [rdat-v0.4.2-pwa.zip](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/rdat-v0.4.2-pwa.zip) | ~4 MB |
 
-> v0.4.1 is a **pre-release**. See [What's New in v0.4.1](#whats-new-in-v041) below.
+> v0.4.2 is a **pre-release**. See [What's New in v0.4.2](#whats-new-in-v042) below.
 
 ---
 
@@ -177,6 +177,27 @@ Three translation pipeline modes are available, selectable via the Models panel:
 ### Translation Direction
 
 A direction toggle at the top of the editor lets you switch between **EN to AR** (English to Arabic, default) and **AR to EN** (Arabic to English). The direction is stored in the workspace state and persists across sessions.
+
+---
+
+## What's New in v0.4.2
+
+**Released 2026-10-03** — [Pre-release](https://github.com/waleedmandour/rdat/releases/tag/v0.4.2). PWA Ollama support, model catalog improvements, instruction-text scaling. All gates green (lint clean, 397/397 tests pass, vite build OK).
+
+### PWA can now use Ollama (not just WebLLM)
+
+Previously the PWA only used WebLLM (WebGPU) as its local LLM — Ollama was Tauri-only. v0.4.2 adds an HTTP backend to `OllamaAdapter` so the PWA can reach a locally-installed Ollama daemon at `http://localhost:11434`. The adapter factory now tries Ollama first in both Tauri and PWA mode, falling back to WebLLM only if Ollama is unreachable.
+
+**To use Ollama from the PWA:** set `OLLAMA_ORIGINS=*` (or your PWA origin) in your Ollama environment so it accepts cross-origin requests from the browser. Then start Ollama normally — the PWA will detect it automatically. This gives PWA users access to Ollama's full model catalog (including the 12B QAT model below) with native-speed inference, without requiring the Tauri desktop app.
+
+### Gemma 4 12B QAT + model filtering
+
+- **Added `gemma4:12b-qat`** to the recommended Ollama catalog — the Quantization-Aware Training variant of Gemma 4 12B (~7 GB, highest quality).
+- **Filtered out non-translation models** (embedding models like `nomic-embed`, vision models like `llava`, code-only models like `codellama`) from the "user-pulled" list. The Models panel now stays focused on translation-relevant models. Users can still pull hidden models via Ollama directly; RDAT just doesn't display them.
+
+### Instruction text scales with editor font
+
+The `A−/A+/Reset` font-size controls now also scale the app's instruction text (panel headers, segment-number badges, direction toggle, sidebar tabs, status rows, import instructions) via a second CSS variable `--instruction-font-size` (71% of the editor font, floored at 10px). Previously only the source/target segment text scaled; the surrounding labels stayed tiny even at large editor sizes.
 
 ---
 

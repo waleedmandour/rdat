@@ -672,6 +672,11 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
         // ≥ 1.8 (diacritics not clipped), Latin ~1.5.
         ["--editor-font-size" as string]: `${editorFontSize}px`,
         ["--editor-line-height" as string]: isRTL ? "1.85" : "1.55",
+        // v0.4.2: instruction text (labels, hints, headers, badges)
+        // scales with the editor font but stays smaller — ~71% of the
+        // editor size, floored at 10px so it's still legible at the
+        // minimum editor size (14px → 10px instruction).
+        ["--instruction-font-size" as string]: `${Math.max(10, Math.round(editorFontSize * 0.71))}px`,
       }}
       onFocusCapture={() => { isWorkspaceFocusedRef.current = true; }}
       onBlurCapture={(e) => {
@@ -683,7 +688,10 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     >
 
       {/* Direction Toggle Bar */}
-      <div className="h-9 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-center gap-2 px-4 select-none">
+      <div
+        className="h-9 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-center gap-2 px-4 select-none"
+        style={{ fontSize: "var(--instruction-font-size, 10px)" }}
+      >
         <button
           onClick={() => setDirection("en-ar")}
           className={cn(
@@ -812,8 +820,11 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       <div className={cn("flex-1 h-1/2 lg:h-full flex flex-col bg-background overflow-hidden border-r dark:border-white/5 border-border", isArToEn && "lg:order-1")}>
 
         {/* Panel Header */}
-        <div className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4 text-xs font-semibold select-none">
-          <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500">
+        <div
+          className="h-10 dark:bg-white/5 bg-surface border-b dark:border-white/5 border-border flex items-center justify-between px-4 text-xs font-semibold select-none"
+          style={{ fontSize: "var(--instruction-font-size, 10px)" }}
+        >
+          <span className="font-bold uppercase tracking-widest text-slate-500">
             {isArToEn
               ? (isRTL ? "الترجمة المقابلة - إنكليزي (LTR)" : "Target Translation - English")
               : (isRTL ? "الترجمة المقابلة - عربي (RTL)" : "Target Translation - Arabic")}
@@ -910,7 +921,10 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       </div>
 
       {/* Right panel (Terminology matched Sidebar & AI Tutor) */}
-      <aside className="w-80 border-l dark:border-white/10 border-border bg-surface flex flex-col select-none shrink-0 hidden md:flex">
+      <aside
+        className="w-80 border-l dark:border-white/10 border-border bg-surface flex flex-col select-none shrink-0 hidden md:flex"
+        style={{ fontSize: "var(--instruction-font-size, 10px)" }}
+      >
         
         {/* Sidebar Tab Switcher */}
         <div className="h-11 border-b border-border dark:border-white/5 flex items-center bg-gray-50/5 dark:bg-black/10 shrink-0">
