@@ -15,6 +15,15 @@ interface WorkspaceState {
   manualBreaks: ManualOverride[];
   /** Manual join overrides (global segment indices). */
   manualJoins: number[];
+  /**
+   * Active document/project id (Issue 2, v0.4.1). Generated on import
+   * (crypto.randomUUID()). Used in segment ids so confirming a segment
+   * in document B doesn't overwrite document A's saved translation.
+   * null when no document is loaded.
+   */
+  currentDocId: string | null;
+  /** Display name of the active document (filename or "Pasted text"). */
+  currentDocName: string;
   setSourceText: (text: string) => void;
   setTargetTexts: (textsOrUpdater: string[] | ((prev: string[]) => string[])) => void;
   setTargetTextAtIndex: (index: number, text: string) => void;
@@ -26,9 +35,20 @@ interface WorkspaceState {
   addManualJoin: (segmentIndex: number) => void;
   /** Clear all manual overrides (called when source text changes). */
   clearManualOverrides: () => void;
+  /** Set the active document (called on import). */
+  setCurrentDoc: (id: string | null, name: string) => void;
 }
 
 const DEFAULT_SOURCE = "";
+
+function generateDocId(): string {
+  try {
+    return crypto.randomUUID();
+  } catch {
+    // Fallback for environments without crypto.randomUUID
+    return `doc-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  }
+}
 
 export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   sourceText: DEFAULT_SOURCE,
@@ -39,8 +59,21 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
   granularity: "sentence",
   manualBreaks: [],
   manualJoins: [],
+  currentDocId: null,
+  currentDocName: "",
 
-  setSourceText: (sourceText) => set({ sourceText, manualBreaks: [], manualJoins: [], currentSegmentIndex: 0 }),
+  // setSourceText is called on import. Generate a new docId + reset
+  // everything. Also clears manual overrides + segment index.
+  setSourceText: (sourceText) => set({
+    sourceText,
+    manualBreaks: [],
+    manualJoins: [],
+    currentSegmentIndex: 0,
+    // Issue 2: generate a fresh docId on every new source text so the
+    // new document's segments don't collide with a previous document's.
+    currentDocId: sourceText.trim() ? generateDocId() : null,
+    currentDocName: sourceText.trim() ? "Pasted text" : "",
+  }),
   setTargetTexts: (textsOrUpdater) => set((state) => {
     const newTargetTexts = typeof textsOrUpdater === 'function'
       ? textsOrUpdater(state.targetTexts)
@@ -63,5 +96,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set) => ({
     manualJoins: [...state.manualJoins, segmentIndex],
   })),
   clearManualOverrides: () => set({ manualBreaks: [], manualJoins: [] }),
+  setCurrentDoc: (id, name) => set({ currentDocId: id, currentDocName: name }),
 }));
 export default useWorkspaceStore;

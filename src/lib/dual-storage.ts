@@ -3,19 +3,22 @@ import { GlossaryEntry, StoreName } from "../types";
 const DB_NAME = "rdat_copilot_db";
 // v2 → v3 (audit fix #6): segments store keyPath changed from
 // autoIncrement-int to a deterministic string id so re-confirming an
-// edited segment upserts instead of appending a duplicate. The
-// onupgradeneeded handler drops the old store and recreates it.
+// edited segment upserts instead of appending a duplicate. Drop+recreate.
 //
-// v3 → v4 (Task 2, v0.4.0): ADDITIVE migration. We add a `sourceHash`
-// index on the segments store so the hydration path can refuse to
-// re-attach a saved translation to a different source text. We do NOT
-// drop or recreate the store — existing confirmed segments are kept.
-// Old entries without a `sourceHash` field remain readable (the field
-// is simply undefined); the hydration path treats undefined as "do not
-// attach" (conservative — the user re-translates). This is forward-
-// compatible with the planned docId follow-up: docId will be another
-// additive index in v5.
-const DB_VERSION = 4;
+// v3 → v4 (Task 2, v0.4.0): ADDITIVE. Added `sourceHash` index on the
+// segments store so hydration can refuse to re-attach a saved
+// translation to different source text. No drop.
+//
+// v4 → v5 (Issue 2, v0.4.1): ADDITIVE. Added `docId` index on the
+// segments store + a new `documents` object store, so confirming a
+// segment in document B no longer overwrites document A's saved
+// translation (the old id format `{sourceLang}-{targetLang}-{idx}`
+// collided across documents in the same language pair). The new id
+// format is `{docId}:{sourceLang}-{targetLang}:{idx}`. Legacy v4
+// entries without `docId` are NOT attached by hydration (conservative
+// — the user re-translates). Forward-compatible with future per-
+// document operations (rename, delete, list). No drop.
+const DB_VERSION = 5;
 
 // Key used inside the `sync_meta` object store to persist the set of
 // reference DB IDs that the user has downloaded. Stored as a string[]
@@ -72,6 +75,14 @@ export function openDB(): Promise<IDBDatabase> {
       // if the index already exists).
       if (!segStore.indexNames.contains("sourceHash")) {
         segStore.createIndex("sourceHash", "sourceHash", { unique: false });
+      }
+      // Issue 2 (v0.4.1): add docId index (additive, idempotent).
+      if (!segStore.indexNames.contains("docId")) {
+        segStore.createIndex("docId", "docId", { unique: false });
+      }
+      // Issue 2 (v0.4.1): documents store (document/project metadata).
+      if (!db.objectStoreNames.contains("documents")) {
+        db.createObjectStore("documents", { keyPath: "id" });
       }
       if (!db.objectStoreNames.contains("sync_meta")) {
         db.createObjectStore("sync_meta", { keyPath: "key" });

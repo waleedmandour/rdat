@@ -160,25 +160,31 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       const confirmedMap: Record<number, boolean> = {};
       const dbTexts: Record<number, string> = {};
 
-      // ─── Stale-attachment guard (Task 2, v0.4.0) ────────────────
+      // ─── Stale-attachment guard (Task 2, v0.4.0 + Issue 2, v0.4.1) ──
       // Previously this hydrated ANY segment whose segment_index was
       // in range, regardless of language pair or source text — so an
       // AR→EN segment at index 3 could hydrate into an EN→AR session
       // at index 3 if the source happened to be the same length. Now
       // we require:
-      //   1. source_lang + target_lang match the active direction
-      //   2. sourceHash matches the current segment's hash (OR the
-      //      entry has no sourceHash, in which case we conservatively
-      //      DO NOT attach — the user re-translates)
+      //   1. docId matches the active document (Issue 2, v0.4.1) —
+      //      without this, confirming in doc B would hydrate doc A's
+      //      translations into doc B's editor. Legacy entries without
+      //      docId are NOT attached (conservative).
+      //   2. source_lang + target_lang match the active direction
+      //   3. sourceHash matches the current segment's hash
       const sourceLang = isArToEn ? "ar" : "en";
       const targetLang = isArToEn ? "en" : "ar";
+      const activeDocId = useWorkspaceStore.getState().currentDocId;
 
       for (const entry of dbEntries) {
         if (
           entry.segment_index !== undefined &&
           entry.segment_index < currentSentencesLen &&
           entry.source_lang === sourceLang &&
-          entry.target_lang === targetLang
+          entry.target_lang === targetLang &&
+          // Issue 2: docId must match the active document. If the
+          // entry has no docId (legacy v4), skip it (conservative).
+          activeDocId && entry.docId === activeDocId
         ) {
           // sourceHash check: attach only if the hash matches the
           // current segment's hash. Legacy entries (no sourceHash)
@@ -356,12 +362,18 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
       // Audit fix #6: deterministic string id keyed on direction +
       // segment index. Re-confirming an edited segment now upserts
       // (overwrites the prior row) instead of appending a duplicate.
-      // The id format is "{sourceLang}-{targetLang}-{idx}" which is
-      // unique per (direction, segment) pair — switching direction
-      // produces different ids, which is correct because an AR→EN
-      // segment-3 confirmation is a different translation from an
-      // EN→AR segment-3 confirmation.
-      const segmentId = `${sourceLang}-${targetLang}-${idx}`;
+      //
+      // Issue 2 (v0.4.1): the id now includes docId so confirming a
+      // segment in document B doesn't overwrite document A's saved
+      // translation (the old format `{sourceLang}-{targetLang}-{idx}`
+      // collided across documents in the same language pair). The new
+      // format is `{docId}:{sourceLang}-{targetLang}-{idx}`. If docId
+      // is null (legacy state), fall back to the old format for
+      // backward compatibility.
+      const docId = useWorkspaceStore.getState().currentDocId;
+      const segmentId = docId
+        ? `${docId}:${sourceLang}-${targetLang}-${idx}`
+        : `${sourceLang}-${targetLang}-${idx}`;
 
       const newEntry: SegmentEntry = {
         id: segmentId,
@@ -376,6 +388,9 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
         // refuse to re-attach this translation to different source
         // text. See src/lib/segmentation/types.ts fnv1aHex.
         sourceHash: segmentSourceHashes[idx],
+        // Issue 2 (v0.4.1): persist docId so hydration can filter by
+        // document + cross-document overwrites can't happen.
+        docId: docId || undefined,
       };
 
       await putToStore("segments", newEntry);
@@ -428,28 +443,35 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
   // state, manual split/merge overrides. Aborts in-flight LLM/Gemini
   // requests (via clearPrefetchCache + the TargetEditor effect that
   // resets on segment-count change). If the checkbox is checked, also
-  // deletes saved translations for the ACTIVE language pair only.
-  // Glossary, TM, and settings are never touched.
+  // deletes saved translations for the ACTIVE document only (Issue 2,
+  // v0.4.1: scoped by docId, not language pair — so clearing doc B
+  // never touches doc A's saved work). Glossary, TM, and settings are
+  // never touched.
   const handleClearText = async () => {
-    const sourceLang = isArToEn ? "ar" : "en";
-    const targetLang = isArToEn ? "en" : "ar";
+    const activeDocId = useWorkspaceStore.getState().currentDocId;
 
     // 1. Clear prefetch/ghost caches (aborts stale suggestions)
     clearPrefetchCache();
 
-    // 2. Optionally delete saved translations for this language pair
-    if (clearAlsoSaved) {
+    // 2. Optionally delete saved translations for the active document.
+    // Issue 2 (v0.4.1): scoped by docId (was: by language pair). This
+    // is the key fix — the old scope wiped OTHER documents in the same
+    // language pair. Now only the active document's segments are deleted.
+    if (clearAlsoSaved && activeDocId) {
       try {
         const allEntries = await getAllofStore<SegmentEntry>("segments");
-        const toDelete = allEntries.filter(
-          (e) => e.source_lang === sourceLang && e.target_lang === targetLang
-        );
-        // Delete each by its id. We don't use clearStore("segments")
-        // because that would wipe ALL language pairs.
+        const toDelete = allEntries.filter((e) => e.docId === activeDocId);
         for (const entry of toDelete) {
           if (entry.id !== undefined) {
             await deleteFromStore("segments", entry.id);
           }
+        }
+        // Also delete the document metadata row
+        try {
+          await deleteFromStore("documents", activeDocId);
+        } catch {
+          // Non-fatal — the document row may not exist if the user
+          // never imported via the file picker (pasted text).
         }
       } catch (e) {
         console.warn("[ClearText] Failed to delete saved segments:", e);
@@ -476,10 +498,10 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
     showToast(
       isRTL
         ? clearAlsoSaved
-          ? "تم مسح النص والترجمات المحفوظة لهذا الاتجاه"
+          ? "تم مسح النص والترجمات المحفوظة لهذا المستند"
           : "تم مسح النص (مع الاحتفاظ بالترجمات المحفوظة)"
         : clearAlsoSaved
-          ? "Cleared text and saved translations for this direction"
+          ? "Cleared text and saved translations for this document"
           : "Cleared text (saved translations kept)",
       "success"
     );
@@ -1031,12 +1053,12 @@ export function TranslationWorkspace({}: TranslationWorkspaceProps) {
               />
               <span className="text-xs text-foreground leading-relaxed">
                 {isRTL
-                  ? "حذف الترجمات المحفوظة لهذا الزوج اللغوي أيضًا"
-                  : "Also delete saved translations for this language pair"}
+                  ? "حذف الترجمات المحفوظة لهذا المستند أيضًا"
+                  : "Also delete saved translations for this document"}
                 <span className="block text-[10px] text-muted-foreground mt-0.5">
                   {isRTL
-                    ? "فقط للاتجاه النشط. القاموس والذاكرة والإعدادات لا تُمسح."
-                    : "Active direction only. Glossary, TM, and settings are never touched."}
+                    ? "فقط للمستند النشط. القاموس والذاكرة والإعدادات لا تُمسح."
+                    : "Active document only. Glossary, TM, and settings are never touched."}
                 </span>
               </span>
             </label>

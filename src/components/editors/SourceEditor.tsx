@@ -25,7 +25,7 @@ export function SourceEditor({
   const isRTL = locale === "ar";
   const { showToast } = useToast();
 
-  const { setSourceText, setTargetTexts, direction } = useWorkspaceStore();
+  const { setSourceText, setTargetTexts, direction, setCurrentDoc } = useWorkspaceStore();
   // When direction is "ar-en" the source panel is showing Arabic input.
   // When "en-ar" (default) it's showing English input. This drives the
   // header label, the language tag, the import placeholder, and the
@@ -37,6 +37,7 @@ export function SourceEditor({
   const [isImportOpen, setIsImportOpen] = useState(false);
   const [importText, setImportText] = useState("");
   const [isDragging, setIsDragging] = useState(false);
+  const [pendingFileName, setPendingFileName] = useState<string>("");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const handleImportSubmit = () => {
@@ -62,9 +63,20 @@ export function SourceEditor({
 
     setSourceText(importText);
     setTargetTexts(Array(parsed.length).fill(""));
+    // Issue 2 (v0.4.1): setSourceText above already generated a fresh
+    // docId. Override the docName here with the imported filename if
+    // we have one (the store defaults to "Pasted text"). This gives
+    // the document a meaningful display name for the future document-
+    // manager UI + for the JSON backup filename.
+    const docId = useWorkspaceStore.getState().currentDocId;
+    if (docId) {
+      const name = pendingFileName || "Pasted text";
+      setCurrentDoc(docId, name);
+    }
     onSelectIdx(0);
     setIsImportOpen(false);
     setImportText("");
+    setPendingFileName("");
 
     showToast(
       isRTL
@@ -94,6 +106,9 @@ export function SourceEditor({
 
   const handleFile = async (file: File) => {
     const fileName = file.name.toLowerCase();
+    // Issue 2 (v0.4.1): capture the filename (without extension) as
+    // the document name. Used by handleImportSubmit to set currentDocName.
+    setPendingFileName(file.name.replace(/\.[^.]+$/, ""));
 
     // .txt files: read as text directly
     if (file.type === "text/plain" || fileName.endsWith(".txt")) {
