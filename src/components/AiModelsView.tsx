@@ -246,10 +246,22 @@ export function AiModelsView() {
 
   // ─── Pull / Download a model ─────────────────────────────────────
   const handlePullModel = async (modelId: string) => {
-    if (!adapter || !adapter.pullModel) {
+    if (!adapter) {
       showToast(
-        isRTL ? "هذا المحرك لا يدعم سحب النماذج" : "This adapter does not support pulling models",
+        isRTL
+          ? "لا يوجد محرك محلي متاح. استخدم لوحة «الاتصال بأولاما» أعلاه أو حمّل نموذج WebLLM."
+          : "No local engine available. Use the 'Connect to local Ollama' card above, or load a WebLLM model.",
         "warning"
+      );
+      return;
+    }
+    if (!adapter.pullModel) {
+      // WebLLM downloads on loadModel, not pullModel — redirect the user
+      showToast(
+        isRTL
+          ? "هذا المحرك (WebLLM) يحمّل النماذج مباشرة. اضغط «تحميل» بدلاً من «سحب»."
+          : "This engine (WebLLM) downloads models on load. Click 'Load' instead of 'Pull'.",
+        "info"
       );
       return;
     }

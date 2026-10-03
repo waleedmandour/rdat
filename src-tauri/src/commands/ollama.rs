@@ -87,6 +87,27 @@ fn ollama_inference_client() -> reqwest::Client {
     ollama_http_client(300) // 5 minutes — cold model loads can take 30+ seconds
 }
 
+/// Build a reqwest client for Ollama model pulls (very long timeout).
+///
+/// Fix 3 (v0.4.3): the inference client's 300s (5-minute) timeout was
+/// killing multi-GB pulls (e.g. gemma4:12b-it-qat at 7.2 GB takes
+/// ~24 minutes at 5 MB/s). A dedicated pull client with no total
+/// timeout is safe because:
+///   1. The streaming NDJSON response keeps the connection alive
+///   2. Progress events are emitted for every chunk, proving liveness
+///   3. The user can cancel from the UI (which drops the future)
+///
+/// We still set a connect_timeout (10s) so a dead Ollama doesn't hang.
+fn ollama_pull_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .no_proxy()
+        .connect_timeout(Duration::from_secs(10))
+        // No total timeout — pulls can take 30+ minutes for large models
+        .timeout(None)
+        .build()
+        .expect("failed to build reqwest pull client for Ollama")
+}
+
 // ─── Shared Types ─────────────────────────────────────────────────
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -287,7 +308,9 @@ pub async fn ollama_pull_model(
     model: String,
 ) -> Result<(), String> {
     let url = format!("{}/api/pull", ollama_base_url());
-    let client = ollama_inference_client();
+    // Fix 3 (v0.4.3): use the dedicated pull client (no total timeout)
+    // instead of the inference client (300s timeout that killed multi-GB pulls).
+    let client = ollama_pull_client();
 
     eprintln!("[ollama_pull_model] Pulling model: {}", model);
 
