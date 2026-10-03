@@ -39,6 +39,17 @@ jobs:
       - name: Run Phase 3 regression sweep
         run: npx tsx scripts/test-phase3-regression.ts
 
+      # v0.4.0 smoke tests: segmentation, ghost-gate, webllm-catalog.
+      # Each exits non-zero on any failure.
+      - name: Run segmentation test suite (v0.4.0)
+        run: npx tsx scripts/test-segmentation.ts
+
+      - name: Run ghost-gate test suite (v0.4.0)
+        run: npx tsx scripts/test-ghost-gate.ts
+
+      - name: Run WebLLM catalog test suite (v0.4.0)
+        run: npx tsx scripts/test-webllm-catalog.ts
+
       - name: Vite production build
         run: npm run build
 

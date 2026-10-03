@@ -166,15 +166,43 @@ A direction toggle at the top of the editor lets you switch between **EN to AR**
 
 ---
 
+## Unreleased (v0.4.0)
+
+### Paragraph-faithful CAT-grade segmentation (Trados/SRX-style)
+
+The old line-only `sourceText.split(/\n+/)` splitter has been replaced with a pure, dependency-free, deterministic, lossless segmenter at `src/lib/segmentation/`. Paragraphs are hard boundaries; sentences are split within paragraphs via an SRX-style ordered rule table (break / no-break, first match wins). The rule set is chosen by dominant script, not translation direction — so a Latin token inside an Arabic paragraph still gets Arabic rules.
+
+- **English rules**: break after `. ! ? …` (+ closing quotes/brackets) before whitespace + uppercase/digit/opening quote. No-break: extendable abbreviation table (Mr, Dr, e.g, i.e, Fig, Vol, Inc, Ltd, a.m, p.m, months…), single-letter initials, decimals/versions (3.14, v2.1.0), URLs/emails, mid-sentence ellipsis, list markers, multi-part abbreviations (Ph.D. U.S.A.).
+- **Arabic rules**: terminators `. ! ? ؟ …` + combos (؟! !؟) with closing `«» "" () [] ﴾` attached. Weak `، ؛ :` never breaks. Arabic-Indic ٠-٩ and Persian ۰-۹ digits, decimal ٫, thousands ٬, ٪ — a `.` between digits never breaks. Numbered lists (١. ١- (١) أ- أ)) never break. Abbreviation table (د. أ.د. م. ص.) with multi-part support. Year suffixes م / هـ. Protected spans `«» "" () [] ﴿﴾` (balanced, capped, reset at paragraph boundaries). Quote + attribution verb (قال، قالت، سأل…) → one segment. **Long-sentence soft-split suggestions** (≥45 tokens, scored by balance + closeness to middle at `،` / `؛` followed by a clause-initial connector) — never auto-applied, shown as a "Split here" affordance.
+- **Granularity toggle**: Sentence (default) or Paragraph, in the direction bar.
+- **Manual split / merge**: stored as overrides, cleared when source text changes.
+- **Data integrity**: `sourceHash` (FNV-1a) on every segment. IndexedDB v3→v4 additive migration (adds index, keeps existing data). Hydration refuses to re-attach a saved translation to different source text. Forward-compatible with the planned `docId` follow-up.
+- **Lossless**: `concat(segments + separators) === original` exactly. Idempotent. 100k chars in <100 ms.
+
+### Ghost-text gate (hide until typing)
+
+Ghost-text suggestions are no longer displayed until the translator has entered their first meaningful characters in a target segment. Background generation (prefetch + LLM requests) still runs so suggestions are ready — only **display** is gated. Pure stateless predicate (`GHOST_GATE_MIN_CHARS = 1`; change to 3 for "first full word"). Covers all tiers (LTE, local LLM, Gemini). Tab is never trapped. Tier-error hints stay visible.
+
+### Font size controls + Clear text
+
+- **A− / A+ / Reset** controls in the workspace toolbar. Range 12–32 px, 2 px steps, persisted. Driven through one CSS variable (`--editor-font-size`) so source segments, target editor, and ghost-text chip all track it. Script-aware line-height (Arabic ≥ 1.85, Latin ~1.55). Shortcuts: `Ctrl/Cmd + +/−/0` (workspace-focus-scoped, so browser zoom works elsewhere). Auto-growing textareas recompute on size change.
+- **Clear text** action (trash icon) with a confirmation dialog. Clears source, targets, segmentation, manual overrides. Checkbox (default on) also deletes saved translations for the **active language pair only** — glossary, TM, and settings are never touched. File input resets so re-uploading the same file triggers `onChange`.
+
+### WebLLM: config-driven catalog + Experimental Gemma 4 E4B
+
+The WebLLM catalog is centralized in `src/lib/webllm-catalog.ts` (previously duplicated in `local-llm-engine.ts` + `web-llm-adapter.ts`). A community Gemma 4 E4B build (`welcoma/gemma-4-E4B-it-q4f16_1-MLC`) is registered as **Experimental** via a custom `appConfig.model_list`. No verified 12B MLC build exists yet — see `docs/webllm-gemma4-12b-build.md` for the exact `mlc_llm` conversion recipe; adding a 12B build is a one-line catalog entry. Capability gating (`checkModelCapability`) checks `shader-f16`, `maxBufferSize`, `maxStorageBufferBindingSize` and warns (doesn't hard-block) on likely-insufficient devices. Storage pre-check (`precheckStorage`) checks quota and requests `navigator.storage.persist()`. Thinking/reasoning markup is stripped from all model outputs. RAG context is truncated to fit the model's context window.
+
+---
+
 ## Key Features
 
 ### Segmented Translation Editor
 
-A split-pane interface with synchronized source-target segment display. Source text is automatically segmented into logical sentences, each paired with a dedicated translation input field featuring RTL text direction, pronunciation playback via the Web Speech API, and a segment-level confirmation workflow. Segment focus triggers prefetching for zero-latency ghost-text on first keystroke.
+A split-pane interface with synchronized source-target segment display. Source text is segmented by the paragraph-faithful CAT-grade segmenter (`src/lib/segmentation/`) — paragraphs are hard boundaries, sentences are split within paragraphs via SRX-style ordered rules with Arabic-aware extensions (protected `«»`/`﴿﴾` spans, attribution-verb suppression, soft-split suggestions for long sentences). Each segment is paired with a dedicated translation input field featuring RTL text direction, pronunciation playback via the Web Speech API, and a segment-level confirmation workflow. Segment focus triggers prefetching for zero-latency ghost-text on first keystroke. A Sentence/Paragraph granularity toggle and manual split/merge overrides are available in the direction bar.
 
 ### Ghost-Text Predictive Completions
 
-Inline ghost-text suggestions appear in real time as translators type. The pipeline uses three trigger mechanisms:
+Inline ghost-text suggestions appear in real time as translators type. A **display-only gate** (`src/lib/ghost-gate.ts`) hides suggestions until the translator has entered their first meaningful characters in a target segment — background generation still runs so suggestions are ready instantly when the gate opens. The pipeline uses three trigger mechanisms:
 - **Segment focus**: immediate prefetch + suggestion
 - **Typing debounce**: 400 ms after the last keystroke
 - **Idle-pause re-engagement**: 2 seconds after typing stops, the system re-triggers suggestions to provide continuous assistance during thinking pauses
@@ -411,15 +439,16 @@ rdat/
 
 #### WebLLM Catalog (PWA: Fallback when no Ollama)
 
-| Catalog ID | Model | Parameters | Quantization | Approx. Size |
-|------------|-------|-----------|-------------|-------------|
-| `qwen-1.5b` | Qwen 2.5 1.5B Instruct | 1.5B | q4f16_1 | ~1 GB |
-| `gemma-2b` | Gemma 2 2B IT | 2B | q4f16_1 | ~1.4 GB |
-| `qwen-7b` | Qwen 2.5 7B Instruct | 7B | q4f16_1 | ~4 GB |
-| `gemma-7b` | Gemma 2 9B IT | 9B | q4f16_1 | ~5 GB |
-| `llama3-8b` | Llama 3.1 8B Instruct | 8B | q4f16_1 | ~4.5 GB |
+| Catalog ID | Model | Parameters | Quantization | Approx. Size | Badge |
+|------------|-------|-----------|-------------|-------------|-------|
+| `qwen-1.5b` | Qwen 2.5 1.5B Instruct | 1.5B | q4f16_1 | ~1 GB | |
+| `gemma-2b` | Gemma 2 2B IT | 2B | q4f16_1 | ~1.4 GB | |
+| `qwen-7b` | Qwen 2.5 7B Instruct | 7B | q4f16_1 | ~4 GB | |
+| `gemma-7b` | Gemma 2 9B IT | 9B | q4f16_1 | ~5 GB | |
+| `llama3-8b` | Llama 3.1 8B Instruct | 8B | q4f16_1 | ~4.5 GB | |
+| `gemma-4-e4b` | Gemma 4 E4B IT | E4B | q4f16_1 | ~3.98 GB | Experimental |
 
-> **Note:** WebLLM's catalog lags behind Ollama's. For the latest models (Gemma 4, Qwen 3, Llama 4), use the Tauri desktop app with Ollama.
+> **Note:** WebLLM's catalog lags behind Ollama's. For the latest models (Gemma 4, Qwen 3, Llama 4), use the Tauri desktop app with Ollama. The `gemma-4-e4b` entry is a community build (`welcoma/gemma-4-E4B-it-q4f16_1-MLC`) labelled **Experimental** — its README states "browser runtime validation still required." No verified 12B MLC build exists yet; see `docs/webllm-gemma4-12b-build.md` for the conversion recipe. Adding a verified 12B build is a one-line entry in `src/lib/webllm-catalog.ts`.
 
 ---
 
@@ -530,11 +559,14 @@ Get a free key from [Google AI Studio](https://aistudio.google.com/apikey). The 
 
 | Shortcut | Action |
 |----------|--------|
-| `Tab` | Accept full ghost-text suggestion |
+| `Tab` | Accept full ghost-text suggestion (only when gate is open) |
 | `Ctrl + Right` | Accept next word of suggestion |
 | `Alt + ]` | Cycle through alternative candidates |
 | `Esc` | Dismiss current suggestion |
 | `Ctrl + Enter` | Confirm and save segment |
+| `Ctrl/Cmd + +` | Increase editor font size (workspace-focused) |
+| `Ctrl/Cmd + −` | Decrease editor font size (workspace-focused) |
+| `Ctrl/Cmd + 0` | Reset editor font size to default (workspace-focused) |
 
 ---
 

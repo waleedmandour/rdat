@@ -25,6 +25,7 @@ import type {
 } from "../llm-adapter";
 import { useWorkspaceStore } from "../../stores/workspace-store";
 import type { TranslationDirection } from "../../stores/workspace-store";
+import { MODELS } from "../webllm-catalog";
 
 // Lazy-import the engine to avoid pulling WebLLM into the Tauri-only
 // bundle path. The dynamic import also lets us gracefully handle the
@@ -38,47 +39,9 @@ async function getEngine() {
 }
 
 // ─── Static Model Catalog ─────────────────────────────────────────
-// WebLLM has a fixed catalog — models are pulled from MLC's CDN on
-// first load. We expose them as ModelInfo so the AiModelsView can
-// render them uniformly with Ollama models.
-
-const WEBLLM_CATALOG: Array<Omit<ModelInfo, "isCached">> = [
-  {
-    id: "qwen-1.5b",
-    name: "Qwen 2.5 1.5B Instruct",
-    parameters: "1.5B",
-    size: "~1.0 GB",
-    family: "Qwen",
-  },
-  {
-    id: "gemma-2b",
-    name: "Gemma 2 2B IT",
-    parameters: "2B",
-    size: "~1.4 GB",
-    family: "Gemma",
-  },
-  {
-    id: "qwen-7b",
-    name: "Qwen 2.5 7B Instruct",
-    parameters: "7B",
-    size: "~4.0 GB",
-    family: "Qwen",
-  },
-  {
-    id: "gemma-7b",
-    name: "Gemma 2 9B IT",
-    parameters: "9B",
-    size: "~5.0 GB",
-    family: "Gemma",
-  },
-  {
-    id: "llama3-8b",
-    name: "Llama 3.1 8B Instruct",
-    parameters: "8B",
-    size: "~4.5 GB",
-    family: "Llama",
-  },
-];
+// Task 4 (v0.4.0): the catalog is now centralized in
+// src/lib/webllm-catalog.ts. This adapter derives its display catalog
+// from that single source of truth. No duplication.
 
 // ─── Adapter Implementation ───────────────────────────────────────
 
@@ -151,14 +114,26 @@ export class WebLLMAdapter implements LLMAdapter {
   async listModels(): Promise<ModelInfo[]> {
     const engine = await getEngine();
     const result: ModelInfo[] = [];
-    for (const entry of WEBLLM_CATALOG) {
+    for (const entry of MODELS) {
       let isCached = false;
       try {
         isCached = await engine.isModelCached(entry.id);
       } catch {
         // ignore — treat as not cached
       }
-      result.push({ ...entry, isCached });
+      result.push({
+        id: entry.id,
+        name: entry.name,
+        parameters: entry.parameters,
+        size: entry.size,
+        family: entry.family,
+        isCached,
+        // Task 4: surface badge + VRAM in the model info so AiModelsView
+        // can render them. The ModelInfo type may not have these fields,
+        // so we add them as extra properties (consumers that don't know
+        // about them simply ignore them).
+        ...({ badge: entry.badge, vramRequiredMB: entry.vramRequiredMB } as any),
+      });
     }
     return result;
   }

@@ -28,23 +28,28 @@ import {
   buildUserPrompt,
 } from "./llm-adapter";
 import type { TranslationDirection } from "../stores/workspace-store";
+import {
+  MODELS,
+  getModelById,
+  getCustomModelList,
+  stripThinkingMarkup,
+  truncateRAGContext,
+} from "./webllm-catalog";
 
 // ─── Model ID Mapping ─────────────────────────────────────────────
-// Maps the RDAT catalog IDs to the actual MLC WebLLM model registry IDs.
-// We prefer q4f16_1 quantization for the best speed/quality tradeoff.
+// Task 4 (v0.4.0): the catalog is now centralized in
+// src/lib/webllm-catalog.ts. MODEL_MAP is kept as a backward-compat
+// shim for any caller that still reads it, but it's derived from the
+// catalog so there's a single source of truth.
 //
 // NOTE: WebLLM catalog lags behind Ollama. Gemma 4 / Qwen 3 / Llama 4
 // may not yet be on MLC's registry. The OllamaAdapter is the primary
 // path for modern models; WebLLMAdapter is the browser fallback and
 // uses whatever MLC has available. See RECOMMENDED_OLLAMA_MODELS in
 // ollama-adapter.ts for the modern lineup.
-export const MODEL_MAP: Record<string, string> = {
-  "qwen-1.5b": "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-  "gemma-2b": "gemma-2-2b-it-q4f16_1-MLC",
-  "qwen-7b": "Qwen2.5-7B-Instruct-q4f16_1-MLC",
-  "gemma-7b": "gemma-2-9b-it-q4f16_1-MLC", // closest 7B-class Gemma available
-  "llama3-8b": "Llama-3.1-8B-Instruct-q4f16_1-MLC",
-};
+export const MODEL_MAP: Record<string, string> = Object.fromEntries(
+  MODELS.map((m) => [m.id, m.mlcModelId])
+);
 
 // ─── Engine State ──────────────────────────────────────────────────
 
@@ -79,12 +84,28 @@ export function getLastLLMError(): string | null {
 // and cache it. The ghost-text system then compares the user's typed
 // prefix against this cached translation to instantly produce a
 // suggestion remainder — no LLM call needed until the user deviates.
+//
+// Task 3 (v0.4.0): the cache key now includes `direction` so that a
+// direction switch cannot leak a stale suggestion from the other
+// language pair. Previously the key was `sourceText.trim().toLowerCase()`
+// only, which meant an EN→AR prefetch would be returned for an AR→EN
+// query on the same source text. The `clearPrefetchCache()` call on
+// direction switch (in TranslationWorkspace) is belt-and-suspenders;
+// the key change makes it correct even if that call is ever removed.
 const prefetchCache = new Map<string, { translation: string; timestamp: number }>();
 const PREFETCH_TTL_MS = 120_000; // Cache entries expire after 2 minutes
 
+function prefetchKey(sourceText: string, direction: TranslationDirection): string {
+  return `${direction}::${sourceText.trim().toLowerCase()}`;
+}
+
 /** Store a prefetched translation in the cache. */
-export function cachePrefetch(sourceText: string, translation: string): void {
-  prefetchCache.set(sourceText.trim().toLowerCase(), {
+export function cachePrefetch(
+  sourceText: string,
+  translation: string,
+  direction: TranslationDirection = "en-ar"
+): void {
+  prefetchCache.set(prefetchKey(sourceText, direction), {
     translation,
     timestamp: Date.now(),
   });
@@ -98,11 +119,15 @@ export function cachePrefetch(sourceText: string, translation: string): void {
 }
 
 /** Retrieve a cached prefetch translation, or null if not found/expired. */
-export function getPrefetch(sourceText: string): string | null {
-  const entry = prefetchCache.get(sourceText.trim().toLowerCase());
+export function getPrefetch(
+  sourceText: string,
+  direction: TranslationDirection = "en-ar"
+): string | null {
+  const key = prefetchKey(sourceText, direction);
+  const entry = prefetchCache.get(key);
   if (!entry) return null;
   if (Date.now() - entry.timestamp > PREFETCH_TTL_MS) {
-    prefetchCache.delete(sourceText.trim().toLowerCase());
+    prefetchCache.delete(key);
     return null;
   }
   return entry.translation;
@@ -196,9 +221,21 @@ export async function loadModel(
 
   try {
     console.log(`[LocalLLM] Loading model "${mlcModelId}" via WebGPU...`);
-    engine = await CreateMLCEngine(mlcModelId, {
+    // Task 4 (v0.4.0): if the model is a custom (non-prebuilt) build,
+    // pass an appConfig with the model_list so WebLLM can resolve it.
+    // Prebuilt models (Qwen, Gemma 2, Llama 3.1) are resolved via
+    // WebLLM's built-in prebuiltAppConfig.
+    const modelRecord = getModelById(rdatModelId);
+    const engineConfig: any = {
       initProgressCallback: progressCallback,
-    });
+    };
+    if (modelRecord && modelRecord.model && modelRecord.modelLib) {
+      // Custom build — provide the appConfig
+      engineConfig.appConfig = {
+        model_list: getCustomModelList(),
+      };
+    }
+    engine = await CreateMLCEngine(mlcModelId, engineConfig);
     currentModelId = rdatModelId;
     engineState = "ready";
     loadingProgress = 100;
@@ -278,7 +315,9 @@ export async function generateLocalTranslation(
 
     const candidates: string[] = [];
     for (const choice of reply.choices) {
-      const content = choice.message?.content?.trim();
+      // Task 4: strip thinking/reasoning markup (Gemma 4 unified models
+      // may emit ndl...</think> blocks). Never leak into ghost text.
+      const content = stripThinkingMarkup(choice.message?.content ?? "");
       if (content) {
         candidates.push(content);
       }
@@ -339,9 +378,19 @@ export async function generateRAGTranslation(
     // LTE.search() is direction-aware: it matches against the source
     // field for the active direction so AR→EN queries match on Arabic.
     const lte = getLTE();
-    const ragEntries: Array<CorpusEntry & { score: number }> = lte.getStats().entries > 0
+    const rawRagEntries: Array<CorpusEntry & { score: number }> = lte.getStats().entries > 0
       ? lte.search(sourceText, topK, direction)
       : [];
+
+    // Task 4 (v0.4.0): truncate RAG context to fit the loaded model's
+    // context window. RAG is truncated first (per the brief); the
+    // system/user prompts are never truncated. Falls back to 2048 if
+    // the model record is missing (shouldn't happen).
+    const modelRec = currentModelId ? getModelById(currentModelId) : undefined;
+    const ctxWindow = modelRec?.contextWindow ?? 2048;
+    const ragEntries = ctxWindow >= 8192
+      ? rawRagEntries
+      : truncateRAGContext(rawRagEntries, sourceText, targetPrefix, ctxWindow);
 
     // Build the structured system + user prompts via the shared
     // direction-aware builders. This is the same path used by the
@@ -361,7 +410,9 @@ export async function generateRAGTranslation(
 
     const candidates: string[] = [];
     for (const choice of reply.choices) {
-      const content = choice.message?.content?.trim();
+      // Task 4: strip thinking/reasoning markup (Gemma 4 unified models
+      // may emit ndl...</think> blocks). Never leak into ghost text.
+      const content = stripThinkingMarkup(choice.message?.content ?? "");
       if (content) {
         candidates.push(content);
       }
@@ -369,7 +420,7 @@ export async function generateRAGTranslation(
 
     // Cache the best candidate in the prefetch cache
     if (candidates.length > 0) {
-      cachePrefetch(sourceText, candidates[0]);
+      cachePrefetch(sourceText, candidates[0], direction);
     }
 
     return candidates;
@@ -401,7 +452,7 @@ export async function prefetchTranslation(
   direction: TranslationDirection = "en-ar"
 ): Promise<string | null> {
   // Check prefetch cache first
-  const cached = getPrefetch(sourceText);
+  const cached = getPrefetch(sourceText, direction);
   if (cached) {
     console.log("[LocalLLM] Prefetch cache hit for segment.");
     return cached;
@@ -412,7 +463,7 @@ export async function prefetchTranslation(
   if (lte.getStats().entries > 0) {
     const lteResult = lte.getSuggestion(sourceText, "", direction);
     if (lteResult && lteResult.match) {
-      cachePrefetch(sourceText, lteResult.match);
+      cachePrefetch(sourceText, lteResult.match, direction);
       return lteResult.match;
     }
   }

@@ -4,6 +4,7 @@ import { useWorkspaceStore } from "../../stores/workspace-store";
 import { useToast } from "../../context/ToastContext";
 import { cn } from "../../lib/utils";
 import { Upload, X } from "lucide-react";
+import { segment } from "../../lib/segmentation";
 
 interface SourceEditorProps {
   sentences: string[];
@@ -44,14 +45,15 @@ export function SourceEditor({
       return;
     }
 
-    // Split text into paragraphs/sentences. The terminator set covers
-    // Latin . ! ? AND Arabic ؟ (U+061F) so Arabic source text is split
-    // correctly when direction is "ar-en". Newlines always split too.
-    // See PHASE 1 task 1.5.
-    const parsed = importText
-      .split(/(?<=[.!?\u061F])\s+|\n+/u)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
+    // ─── Task 2 (v0.4.0): single source of truth for segmentation ──
+    // Previously this used its own regex splitter
+    // (`split(/(?<=[.!?\u061F])\s+|\n+/u)`) which diverged from the
+    // workspace's `split(/\n+/)`, causing targetTexts length to
+    // mismatch sentences length. Now we just set the source text and
+    // let TranslationWorkspace's `segment()` (the SRX-style module)
+    // produce the canonical segments. We use the segmenter here only
+    // to COUNT segments for the toast message.
+    const { segments: parsed } = segment(importText, { granularity: "sentence" });
 
     if (parsed.length === 0) {
       showToast(isRTL ? "فشل تحليل النص!" : "No valid segments found in text!", "error");
@@ -204,6 +206,11 @@ export function SourceEditor({
               onChange={(e) => {
                 const files = e.target.files;
                 if (files && files.length > 0) handleFile(files[0]);
+                // Task 1b: reset the input's value so re-uploading the
+                // SAME file triggers onChange again. Without this, the
+                // browser suppresses the event because the file path
+                // didn't change.
+                e.target.value = "";
               }}
               className="hidden"
               accept=".txt,.docx,.doc"
@@ -271,10 +278,17 @@ export function SourceEditor({
               </div>
 
               {/* Sentence Text */}
-              <p className={cn(
-                "text-sm leading-relaxed font-sans transition-colors duration-150",
-                isActive ? "text-foreground font-medium" : "text-muted-foreground"
-              )}>
+              <p
+                className={cn(
+                  "font-sans transition-colors duration-150",
+                  isActive ? "text-foreground font-medium" : "text-muted-foreground"
+                )}
+                style={{
+                  fontSize: "var(--editor-font-size, 14px)",
+                  lineHeight: "var(--editor-line-height, 1.55)",
+                }}
+                dir={isSourceArabic ? "rtl" : "ltr"}
+              >
                 {sentence}
               </p>
             </div>

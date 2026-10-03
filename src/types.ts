@@ -62,6 +62,11 @@ export interface SegmentEntry {
    * re-confirming an edited segment upserts instead of duplicating.
    * The DB schema was bumped to v3 to drop the old autoIncrement-int
    * segments store and recreate with this mixed-key schema.
+   *
+   * Task 2 (v0.4.0): `sourceHash` was added (DB v4, additive index).
+   * The hydration path refuses to re-attach a saved translation to a
+   * different source text by comparing this hash. Old v3 entries
+   * without `sourceHash` are treated as "do not attach" (conservative).
    */
   id: number | string;
   source: string;
@@ -72,6 +77,13 @@ export interface SegmentEntry {
   score: number;
   source_file?: string;
   segment_index?: number;
+  /**
+   * FNV-1a hash of the source text (hex string). Used by the hydration
+   * path to refuse re-attaching a saved translation to different
+   * source text. Undefined on legacy v3 entries (treated as "do not
+   * attach"). See src/lib/segmentation/types.ts fnv1aHex.
+   */
+  sourceHash?: string;
   created_at?: string;
   updated_at?: string;
   _pendingSync?: boolean;

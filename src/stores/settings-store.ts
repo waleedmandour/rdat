@@ -10,6 +10,13 @@ interface SettingsState {
   useGtr: boolean;
   downloadedModels: string[]; // e.g. ["qwen-1.5b", "gemma-2b"]
   loadedModel: string; // e.g. "gemma-2b" or ""
+  /**
+   * Editor font size in pixels (Task 1a, v0.4.0). Range 12–32, default 14.
+   * Persisted to localStorage. Applied to the workspace root via a
+   * CSS variable (--editor-font-size) so source segments, target
+   * editor, and ghost-text overlay all track it.
+   */
+  editorFontSize: number;
   setEngineMode: (mode: EngineMode) => void;
   setGeminiApiKey: (key: string) => void;
   setRememberApiKey: (remember: boolean) => void;
@@ -17,6 +24,7 @@ interface SettingsState {
   setUseGtr: (use: boolean) => void;
   addDownloadedModel: (modelId: string) => void;
   setLoadedModel: (modelId: string) => void;
+  setEditorFontSize: (size: number) => void;
 }
 
 /**
@@ -40,6 +48,18 @@ function migrateLegacyApiKeyStorage(): void {
   if (localStorage.getItem(MIGRATION_FLAG) === "true") return;
   localStorage.removeItem("rdat_gemini_api_key");
   localStorage.setItem(MIGRATION_FLAG, "true");
+}
+
+// ─── Editor font size helpers (Task 1a, v0.4.0) ────────────────────
+// Range 12–32 px. Clamped on read (defensive against corrupt
+// localStorage) and on write (so callers can't set out-of-range).
+export const EDITOR_FONT_SIZE_MIN = 12;
+export const EDITOR_FONT_SIZE_MAX = 32;
+export const EDITOR_FONT_SIZE_DEFAULT = 14;
+
+export function clampFontSize(size: number): number {
+  if (!Number.isFinite(size)) return EDITOR_FONT_SIZE_DEFAULT;
+  return Math.min(EDITOR_FONT_SIZE_MAX, Math.max(EDITOR_FONT_SIZE_MIN, Math.round(size)));
 }
 
 export const useSettingsStore = create<SettingsState>((set) => {
@@ -73,6 +93,8 @@ export const useSettingsStore = create<SettingsState>((set) => {
     useGtr: getInitial<boolean>("rdat_use_gtr", true),
     downloadedModels: getInitial<string[]>("rdat_downloaded_models", []),
     loadedModel: getInitial<string>("rdat_loaded_model", ""),
+    // Task 1a: editor font size, persisted. Range 12–32, default 14.
+    editorFontSize: clampFontSize(getInitial<number>("rdat_editor_font_size", 14)),
 
     setEngineMode: (engineMode) => {
       localStorage.setItem("rdat_engine_mode", JSON.stringify(engineMode));
@@ -123,6 +145,11 @@ export const useSettingsStore = create<SettingsState>((set) => {
     setLoadedModel: (loadedModel) => {
       localStorage.setItem("rdat_loaded_model", JSON.stringify(loadedModel));
       set({ loadedModel });
+    },
+    setEditorFontSize: (size) => {
+      const clamped = clampFontSize(size);
+      localStorage.setItem("rdat_editor_font_size", JSON.stringify(clamped));
+      set({ editorFontSize: clamped });
     },
   };
 });
