@@ -19,3 +19,5 @@ Thumbs.db
 
 # Debug
 npm-debug.log*
+bench/translate/results/
+bench/translate/.cache/
