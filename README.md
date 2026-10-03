@@ -2,20 +2,34 @@
 
 **Professional Bidirectional English↔Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Version](https://img.shields.io/badge/Version-0.3.1-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.3.1)
+[![Version](https://img.shields.io/badge/Version-0.4.0-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.4.0)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
 [![PWA Ready](https://img.shields.io/badge/PWA-Optional-6366f1?logo=pwa&logoColor=white)](https://github.com/waleedmandour/rdat)
 [![CI](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml/badge.svg)](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml)
 
+### Download v0.4.0
+
+| Platform | Artifact | Size |
+|----------|----------|------|
+| **Windows** (x64) | [RDAT.Copilot_0.4.0_x64-setup.exe](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_x64-setup.exe) | ~6.0 MB |
+| **macOS** (Apple Silicon) | [RDAT.Copilot_0.4.0_aarch64.dmg](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_aarch64.dmg) | ~10.2 MB |
+| **macOS** (Intel) | [RDAT.Copilot_0.4.0_x64.dmg](https://github.com/waleedmandour/rdat/releases/tag/v0.4.0) *(building)* | — |
+| **Linux** (.deb) | [RDAT.Copilot_0.4.0_amd64.deb](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_amd64.deb) | ~6.9 MB |
+| **Linux** (.rpm) | [RDAT.Copilot-0.4.0-1.x86_64.rpm](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot-0.4.0-1.x86_64.rpm) | ~6.9 MB |
+| **Linux** (.AppImage) | [RDAT.Copilot_0.4.0_amd64.AppImage](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/RDAT.Copilot_0.4.0_amd64.AppImage) | ~83.4 MB |
+| **PWA** (browser) | [rdat-v0.4.0-pwa.zip](https://github.com/waleedmandour/rdat/releases/download/v0.4.0/rdat-v0.4.0-pwa.zip) | ~4.1 MB |
+
+> v0.4.0 is a **pre-release**. See [What's New in v0.4.0](#whats-new-in-v040) below.
+
 ---
 
 ## Overview
 
-RDAT: Translation Copilot is an AI-powered translation workspace purpose-built for professional **bidirectional English↔Arabic** translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline, from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback, delivering real-time suggestions while keeping translators in full control of every word. As of v0.3.1, both EN→AR and AR→EN directions are fully supported end-to-end across all three tiers.
+RDAT: Translation Copilot is an AI-powered translation workspace purpose-built for professional **bidirectional English↔Arabic** translation workflows. It combines a segmented translation editor with a three-tier predictive ghost-text pipeline, from instant corpus lookups and RAG-augmented on-device LLM inference to cloud-based Gemini fallback, delivering real-time suggestions while keeping translators in full control of every word. As of v0.4.0, both EN→AR and AR→EN directions are fully supported end-to-end across all three tiers, with a paragraph-faithful CAT-grade segmenter (SRX-style with Arabic-aware rules), a display-only ghost-text gate, font-size controls, and a config-driven WebLLM catalog.
 
-As of v0.3.1, RDAT ships in **two complementary forms**, sharing a single React/Vite frontend:
+As of v0.4.0, RDAT ships in **two complementary forms**, sharing a single React/Vite frontend:
 
 | Distribution | Best for | Install size | Local LLM |
 |---|---|---|---|
@@ -166,7 +180,13 @@ A direction toggle at the top of the editor lets you switch between **EN to AR**
 
 ---
 
-## Unreleased (v0.4.0)
+## What's New in v0.4.0
+
+**Released 2026-10-03** — [Pre-release](https://github.com/waleedmandour/rdat/releases/tag/v0.4.0). Four new features + two RUSTSEC security fixes. All gates green (lint clean, 247/247 tests pass, 0 cargo-audit vulnerabilities, vite build OK).
+
+### Security fixes
+- **`h2`** 0.4.15 → **0.4.19** — [RUSTSEC-2026-0258](https://rustsec.org/advisories/RUSTSEC-2026-0258) (unbounded empty DATA frames).
+- **`rustls`** 0.23.42 → **0.23.45** — [RUSTSEC-2026-0285](https://rustsec.org/advisories/RUSTSEC-2026-0285) (TLS 1.3 handshake across encryption level boundaries, severity 5.3 medium).
 
 ### Paragraph-faithful CAT-grade segmentation (Trados/SRX-style)
 
