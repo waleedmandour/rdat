@@ -22,6 +22,49 @@
 
 import { isTauriEnvironment } from "./adapters/ollama-adapter";
 import type { TranslationDirection } from "../stores/workspace-store";
+import { useSettingsStore } from "../stores/settings-store";
+import { DEFAULT_GEMINI_MODEL, isModelRetiredMessage, isModelRetiredStatus } from "./gemini-config";
+
+// ─── Model ID resolution (Issue 1, v0.4.1) ────────────────────────
+// The Gemini model ID is read from the settings store (user-configurable,
+// persisted). Falls back to DEFAULT_GEMINI_MODEL if the store hasn't
+// loaded yet or the user cleared it. The Vercel serverless functions
+// use the GEMINI_MODEL env var instead (they can't read localStorage).
+function getConfiguredGeminiModel(): string {
+  try {
+    return useSettingsStore.getState().geminiModel || DEFAULT_GEMINI_MODEL;
+  } catch {
+    return DEFAULT_GEMINI_MODEL;
+  }
+}
+
+/**
+ * Error thrown when the Gemini API indicates the requested model has
+ * been retired or is no longer available. Surfaces a specific actionable
+ * message instead of a generic fatal error. Subclass of FatalError so
+ * the useGemini retry wrapper does NOT retry it (retrying a retired
+ * model is pointless).
+ */
+export class ModelRetiredError extends Error {
+  constructor(modelId: string) {
+    const msg = `Gemini model "${modelId}" is no longer available. Open API Keys and switch to a current model (e.g. ${DEFAULT_GEMINI_MODEL}). See https://ai.google.dev/gemini-api/docs/deprecations`;
+    super(msg);
+    this.name = "ModelRetiredError";
+  }
+}
+
+/**
+ * Classify a Tauri-side Gemini error string. If the message indicates
+ * a retired/deprecated model, throw ModelRetiredError; otherwise throw
+ * a generic Error (which the useGemini hook treats as fatal for 4xx-
+ * style messages or retryable for network-style messages).
+ */
+function classifyTauriError(errorMsg: string): Error {
+  if (isModelRetiredMessage(errorMsg)) {
+    return new ModelRetiredError(getConfiguredGeminiModel());
+  }
+  return new Error(errorMsg);
+}
 
 // ─── Types ────────────────────────────────────────────────────────
 
@@ -206,7 +249,7 @@ async function tauriGeminiBurst(req: GeminiBurstRequest): Promise<GeminiBurstRes
   const systemPrompt = buildBurstPrompt(req.sourceText, req.targetPrefix, direction);
   const result = await invoke("gemini_translate", {
     req: {
-      model: "gemini-2.5-flash",
+      model: getConfiguredGeminiModel(),
       systemPrompt,
       userPrompt: req.sourceText,
       maxTokens: 512,
@@ -215,7 +258,7 @@ async function tauriGeminiBurst(req: GeminiBurstRequest): Promise<GeminiBurstRes
     },
   }) as { candidates: string[]; error: string | null };
 
-  if (result.error) throw new Error(result.error);
+  if (result.error) throw classifyTauriError(result.error);
 
   // Gemini returns the raw text; for burst we asked for JSON, so parse it
   const rawText = result.candidates[0] || "{}";
@@ -234,7 +277,7 @@ async function tauriGeminiFull(req: GeminiFullRequest): Promise<GeminiFullRespon
   const systemPrompt = buildFullPrompt(req.sourceText, req.targetPrefix, direction);
   const result = await invoke("gemini_translate", {
     req: {
-      model: "gemini-2.5-flash",
+      model: getConfiguredGeminiModel(),
       systemPrompt,
       userPrompt: req.sourceText,
       maxTokens: 256,
@@ -243,7 +286,7 @@ async function tauriGeminiFull(req: GeminiFullRequest): Promise<GeminiFullRespon
     },
   }) as { candidates: string[]; error: string | null };
 
-  if (result.error) throw new Error(result.error);
+  if (result.error) throw classifyTauriError(result.error);
   return { translation: (result.candidates[0] || "").trim() };
 }
 
@@ -254,7 +297,7 @@ async function tauriGeminiTutor(req: GeminiTutorRequest): Promise<GeminiTutorRes
   const systemPrompt = buildTutorPrompt(req.sourceText, req.targetText, isRTL, direction);
   const result = await invoke("gemini_translate", {
     req: {
-      model: "gemini-2.5-flash",
+      model: getConfiguredGeminiModel(),
       systemPrompt,
       userPrompt: `Analyze the translation above. Output JSON only.`,
       maxTokens: 1024,
@@ -263,7 +306,7 @@ async function tauriGeminiTutor(req: GeminiTutorRequest): Promise<GeminiTutorRes
     },
   }) as { candidates: string[]; error: string | null };
 
-  if (result.error) throw new Error(result.error);
+  if (result.error) throw classifyTauriError(result.error);
 
   const rawText = result.candidates[0] || "{}";
   try {
@@ -328,7 +371,16 @@ async function classifyFetchError(
   // 5xx and 429 (rate limit) are retryable. 429 is technically a 4xx
   // but the standard practice is to retry with backoff.
   if (status >= 500 || status === 429) {
+    // Issue 1 (v0.4.1): 503 with a retirement message body is a
+    // ModelRetiredError, not a retryable 5xx. Check the body first.
+    if (isModelRetiredStatus(status) && isModelRetiredMessage(bodyMsg)) {
+      return new ModelRetiredError(getConfiguredGeminiModel());
+    }
     return new RetryableError(bodyMsg);
+  }
+  // Issue 1 (v0.4.1): 404 + retirement message = ModelRetiredError.
+  if (isModelRetiredStatus(status) && isModelRetiredMessage(bodyMsg)) {
+    return new ModelRetiredError(getConfiguredGeminiModel());
   }
   // All other 4xx (400, 401, 403, 404, 413, etc.) are fatal — no
   // point retrying, the request itself is wrong.

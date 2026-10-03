@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { EngineMode } from "../types";
+import { DEFAULT_GEMINI_MODEL } from "../lib/gemini-config";
 
 interface SettingsState {
   engineMode: EngineMode;
@@ -17,6 +18,15 @@ interface SettingsState {
    * editor, and ghost-text overlay all track it.
    */
   editorFontSize: number;
+  /**
+   * Gemini model ID (Issue 1, v0.4.1). Configurable so a model
+   * retirement doesn't break Tier 2 + AI Tutor. Default is the latest
+   * stable Flash model (see src/lib/gemini-config.ts). Persisted to
+   * localStorage so the user's choice survives reloads. The Vercel
+   * serverless functions use the GEMINI_MODEL env var instead (they
+   * can't read localStorage).
+   */
+  geminiModel: string;
   setEngineMode: (mode: EngineMode) => void;
   setGeminiApiKey: (key: string) => void;
   setRememberApiKey: (remember: boolean) => void;
@@ -25,6 +35,7 @@ interface SettingsState {
   addDownloadedModel: (modelId: string) => void;
   setLoadedModel: (modelId: string) => void;
   setEditorFontSize: (size: number) => void;
+  setGeminiModel: (model: string) => void;
 }
 
 /**
@@ -95,6 +106,9 @@ export const useSettingsStore = create<SettingsState>((set) => {
     loadedModel: getInitial<string>("rdat_loaded_model", ""),
     // Task 1a: editor font size, persisted. Range 12–32, default 14.
     editorFontSize: clampFontSize(getInitial<number>("rdat_editor_font_size", 14)),
+    // Issue 1 (v0.4.1): Gemini model ID, persisted. Default is the
+    // latest stable Flash model (see gemini-config.ts).
+    geminiModel: getInitial<string>("rdat_gemini_model", DEFAULT_GEMINI_MODEL) || DEFAULT_GEMINI_MODEL,
 
     setEngineMode: (engineMode) => {
       localStorage.setItem("rdat_engine_mode", JSON.stringify(engineMode));
@@ -150,6 +164,11 @@ export const useSettingsStore = create<SettingsState>((set) => {
       const clamped = clampFontSize(size);
       localStorage.setItem("rdat_editor_font_size", JSON.stringify(clamped));
       set({ editorFontSize: clamped });
+    },
+    setGeminiModel: (geminiModel) => {
+      const trimmed = (geminiModel || "").trim() || DEFAULT_GEMINI_MODEL;
+      localStorage.setItem("rdat_gemini_model", JSON.stringify(trimmed));
+      set({ geminiModel: trimmed });
     },
   };
 });

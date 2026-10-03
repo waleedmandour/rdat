@@ -33,7 +33,7 @@ fn http_client() -> reqwest::Client {
 #[derive(Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct GeminiTranslateRequest {
-    /// Gemini model ID (e.g. "gemini-2.5-flash")
+    /// Gemini model ID (e.g. "gemini-3.8-flash"; default if empty)
     pub model: String,
     pub system_prompt: String,
     pub user_prompt: String,
@@ -135,7 +135,13 @@ pub async fn gemini_translate(req: GeminiTranslateRequest) -> Result<GeminiTrans
         });
     }
 
-    let model = if req.model.is_empty() { "gemini-2.5-flash".to_string() } else { req.model.clone() };
+    // Issue 1 (v0.4.1): default model upgraded from gemini-2.5-flash to
+    // gemini-3.8-flash (the latest stable Flash model as of 2026-10-03;
+    // "gemini-4.0-flash" does not exist yet). The frontend sends the
+    // user-configured model in req.model, so this default only applies
+    // when req.model is empty. Keep this in sync with DEFAULT_GEMINI_MODEL
+    // in src/lib/gemini-config.ts. Source: https://ai.google.dev/gemini-api/docs/models
+    let model = if req.model.is_empty() { "gemini-3.8-flash".to_string() } else { req.model.clone() };
     // SECURITY (audit fix #1): The API key is sent via the
     // `x-goog-api-key` HTTP header instead of as a URL query parameter.
     // URL query strings are logged by HTTP proxies, can appear in OS
