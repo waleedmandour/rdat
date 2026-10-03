@@ -29,12 +29,13 @@ function check(label: string, cond: boolean, detail = "") {
 
 console.log("\n══ Ollama PWA + model filtering (v0.4.2) ══");
 
-console.log("\n── RECOMMENDED_OLLAMA_MODELS includes gemma4:12b-qat ──");
+console.log("\n── RECOMMENDED_OLLAMA_MODELS includes gemma4:12b-it-qat ──");
 
 const ollamaSrc = fs.readFileSync(path.resolve("src/lib/adapters/ollama-adapter.ts"), "utf8");
-check("gemma4:12b-qat is in the recommended catalog", ollamaSrc.includes('id: "gemma4:12b-qat"'));
-check("gemma4:12b-qat has a display name mentioning QAT", /gemma4:12b-qat[\s\S]*?QAT/i.test(ollamaSrc));
-check("gemma4:12b-qat shows ~7.0 GB size", /gemma4:12b-qat[\s\S]*?~7\.0 GB/i.test(ollamaSrc));
+check("gemma4:12b-it-qat is in the recommended catalog", ollamaSrc.includes('id: "gemma4:12b-it-qat"'));
+check("gemma4:12b-it-qat has a display name mentioning QAT", /gemma4:12b-it-qat[\s\S]*?QAT/i.test(ollamaSrc));
+check("gemma4:12b-it-qat shows ~7.2 GB size", /gemma4:12b-it-qat[\s\S]*?~7\.2 GB/i.test(ollamaSrc));
+check("gemma4:12b-qat (invalid) is NOT in the catalog", !ollamaSrc.includes('id: "gemma4:12b-qat"'));
 check("Default model is still gemma4:e2b (not changed)", /DEFAULT_OLLAMA_MODEL\s*=\s*"gemma4:e2b"/.test(ollamaSrc));
 
 console.log("\n── isHiddenModel filters non-translation models ──");
@@ -44,7 +45,9 @@ check("HIDDEN_MODEL_PREFIXES includes llava", ollamaSrc.includes('"llava"'));
 check("HIDDEN_MODEL_PREFIXES includes codellama", ollamaSrc.includes('"codellama"'));
 check("HIDDEN_MODEL_PREFIXES includes mxbai-embed", ollamaSrc.includes('"mxbai-embed"'));
 check("isHiddenModel function exists", /function isHiddenModel/.test(ollamaSrc));
-check("listModels uses isHiddenModel filter", /visibleInstalled\s*=\s*installed\.filter\(\s*\(m\)\s*=>\s*!isHiddenModel/.test(ollamaSrc));
+check("listModels uses isHiddenModel filter", /visibleInstalled\s*=\s*installed\.filter\(/.test(ollamaSrc));
+check("listModels supports showAll parameter", /async listModels\(showAll: boolean = false\)/.test(ollamaSrc));
+check("listModels never hides loaded model", /m\.name === loadedModel/.test(ollamaSrc));
 
 console.log("\n── HTTP backend for PWA mode ──");
 

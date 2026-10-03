@@ -41,6 +41,11 @@ pub struct GeminiTranslateRequest {
     pub temperature: f32,
     /// User-provided Gemini API key (stored in frontend localStorage)
     pub api_key: String,
+    /// Fix 4 (v0.4.3): thinking level for Gemini 3.x models.
+    /// "LOW" for ghost text, "" or unset for default (medium).
+    /// gemini-3.8-flash supports low/medium/high only.
+    #[serde(default)]
+    pub thinking_level: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -76,6 +81,18 @@ struct GeminiGenerationConfig {
     #[serde(rename = "maxOutputTokens")]
     max_output_tokens: u32,
     temperature: f32,
+    /// Fix 4 (v0.4.3): thinkingConfig.thinkingLevel for Gemini 3.x.
+    /// gemini-3.8-flash supports low/medium/high (NOT minimal — errors).
+    /// Default is medium; LOW is used for ghost-text (fast, simple).
+    /// Omitted (None) when thinking_level is empty → API uses default.
+    #[serde(rename = "thinkingConfig", skip_serializing_if = "Option::is_none")]
+    thinking_config: Option<ThinkingConfig>,
+}
+
+#[derive(Debug, Serialize)]
+struct ThinkingConfig {
+    #[serde(rename = "thinkingLevel")]
+    thinking_level: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -162,6 +179,16 @@ pub async fn gemini_translate(req: GeminiTranslateRequest) -> Result<GeminiTrans
         generation_config: GeminiGenerationConfig {
             max_output_tokens: req.max_tokens,
             temperature: req.temperature,
+            // Fix 4 (v0.4.3): set thinkingLevel when the frontend passes it.
+            // "LOW" for ghost text (fast, simple translation). Empty string
+            // → None → API uses default (medium for 3.8-flash).
+            thinking_config: if req.thinking_level.is_empty() {
+                None
+            } else {
+                Some(ThinkingConfig {
+                    thinking_level: req.thinking_level.clone(),
+                })
+            },
         },
     };
 

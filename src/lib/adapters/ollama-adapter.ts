@@ -44,6 +44,7 @@ import type {
 } from "../llm-adapter";
 import { buildRAGSystemPrompt, buildUserPrompt } from "../llm-adapter";
 import { useWorkspaceStore } from "../../stores/workspace-store";
+import { useSettingsStore } from "../../stores/settings-store";
 
 // ─── Tauri Detection ──────────────────────────────────────────────
 // We check for Tauri's runtime global. This avoids importing
@@ -87,7 +88,7 @@ async function getInvoke(): Promise<(cmd: string, args?: Record<string, unknown>
 // (embedding, vision-only, code-only) from the "user-pulled" list so the
 // panel stays focused on translation-relevant models.
 
-const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
+export const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
   {
     id: "gemma4:e2b",
     name: "Gemma 4 E2B (Recommended Starter)",
@@ -103,10 +104,24 @@ const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
     family: "Gemma",
   },
   {
-    id: "gemma4:12b-qat",
+    id: "gemma4:e2b-it-qat",
+    name: "Gemma 4 E2B QAT (Quantization-Aware, Higher Quality)",
+    parameters: "2B (QAT)",
+    size: "~1.6 GB",
+    family: "Gemma",
+  },
+  {
+    id: "gemma4:e4b-it-qat",
+    name: "Gemma 4 E4B QAT (Quantization-Aware, Higher Quality)",
+    parameters: "4B (QAT)",
+    size: "~3.2 GB",
+    family: "Gemma",
+  },
+  {
+    id: "gemma4:12b-it-qat",
     name: "Gemma 4 12B QAT (Highest Quality, Quantization-Aware)",
     parameters: "12B (QAT)",
-    size: "~7.0 GB",
+    size: "~7.2 GB",
     family: "Gemma",
   },
   {
@@ -419,8 +434,9 @@ export class OllamaAdapter implements LLMAdapter {
 
   // ── Model Catalog ──
 
-  async listModels(): Promise<ModelInfo[]> {
+  async listModels(showAll: boolean = false): Promise<ModelInfo[]> {
     // v0.4.2: in PWA mode, use the HTTP backend.
+    // v0.4.3: showAll parameter bypasses the hidden-model filter.
     let installed: Array<{ name: string; size: number; digest: string }> = [];
     try {
       if (isTauriEnvironment()) {
@@ -441,7 +457,12 @@ export class OllamaAdapter implements LLMAdapter {
     // v0.4.2: filter out non-translation models (embedding, vision, code)
     // so the panel stays focused. The user can still pull them via
     // Ollama directly; we just don't show them in RDAT.
-    const visibleInstalled = installed.filter((m) => !isHiddenModel(m.name));
+    // v0.4.3: showAll=true bypasses the filter. But we NEVER hide a model
+    // the user has loaded or selected (loadedModelId).
+    const loadedModel = useSettingsStore.getState().loadedModel;
+    const visibleInstalled = installed.filter((m) =>
+      showAll || !isHiddenModel(m.name) || m.name === loadedModel
+    );
 
     // Merge installed models with the recommended catalog so the UI
     // shows both "what you have" and "what you can install".

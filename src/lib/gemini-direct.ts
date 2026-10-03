@@ -255,6 +255,9 @@ async function tauriGeminiBurst(req: GeminiBurstRequest): Promise<GeminiBurstRes
       maxTokens: 512,
       temperature: 0.4,
       apiKey: req.geminiApiKey,
+      // Fix 4 (v0.4.3): LOW thinking for ghost text (fast, simple translation).
+      // gemini-3.8-flash supports low/medium/high; default medium wastes tokens.
+      thinkingLevel: "LOW",
     },
   }) as { candidates: string[]; error: string | null };
 
@@ -283,6 +286,8 @@ async function tauriGeminiFull(req: GeminiFullRequest): Promise<GeminiFullRespon
       maxTokens: 256,
       temperature: 0.3,
       apiKey: req.geminiApiKey,
+      // Fix 4 (v0.4.3): LOW thinking for ghost text.
+      thinkingLevel: "LOW",
     },
   }) as { candidates: string[]; error: string | null };
 

@@ -27,6 +27,15 @@ interface SettingsState {
    * can't read localStorage).
    */
   geminiModel: string;
+  /**
+   * Whether the user has opted in to probing for a local Ollama daemon
+   * in PWA mode (Fix 2, v0.4.3). Default false — the PWA does NOT
+   * probe localhost on boot (Chrome 142+ shows a Local Network Access
+   * permission prompt for every visitor, including those without
+   * Ollama). When true, the adapter factory probes localhost:11434
+   * with a short timeout. Persisted so the choice survives reloads.
+   */
+  pwaOllamaOptIn: boolean;
   setEngineMode: (mode: EngineMode) => void;
   setGeminiApiKey: (key: string) => void;
   setRememberApiKey: (remember: boolean) => void;
@@ -36,6 +45,7 @@ interface SettingsState {
   setLoadedModel: (modelId: string) => void;
   setEditorFontSize: (size: number) => void;
   setGeminiModel: (model: string) => void;
+  setPwaOllamaOptIn: (optIn: boolean) => void;
 }
 
 /**
@@ -109,6 +119,9 @@ export const useSettingsStore = create<SettingsState>((set) => {
     // Issue 1 (v0.4.1): Gemini model ID, persisted. Default is the
     // latest stable Flash model (see gemini-config.ts).
     geminiModel: getInitial<string>("rdat_gemini_model", DEFAULT_GEMINI_MODEL) || DEFAULT_GEMINI_MODEL,
+    // Fix 2 (v0.4.3): PWA Ollama opt-in. Default false — the PWA does
+    // NOT probe localhost on boot. Persisted.
+    pwaOllamaOptIn: getInitial<boolean>("rdat_pwa_ollama_opt_in", false),
 
     setEngineMode: (engineMode) => {
       localStorage.setItem("rdat_engine_mode", JSON.stringify(engineMode));
@@ -169,6 +182,10 @@ export const useSettingsStore = create<SettingsState>((set) => {
       const trimmed = (geminiModel || "").trim() || DEFAULT_GEMINI_MODEL;
       localStorage.setItem("rdat_gemini_model", JSON.stringify(trimmed));
       set({ geminiModel: trimmed });
+    },
+    setPwaOllamaOptIn: (pwaOllamaOptIn) => {
+      localStorage.setItem("rdat_pwa_ollama_opt_in", JSON.stringify(pwaOllamaOptIn));
+      set({ pwaOllamaOptIn });
     },
   };
 });
