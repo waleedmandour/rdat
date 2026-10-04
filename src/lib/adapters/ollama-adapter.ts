@@ -125,6 +125,20 @@ export const RECOMMENDED_OLLAMA_MODELS: Array<Omit<ModelInfo, "isCached">> = [
     family: "Gemma",
   },
   {
+    id: "translategemma:4b",
+    name: "TranslateGemma 4B (Translation Specialist, 55 languages)",
+    parameters: "4B",
+    size: "~3.3 GB",
+    family: "TranslateGemma",
+  },
+  {
+    id: "translategemma:12b",
+    name: "TranslateGemma 12B (Translation Specialist, Higher Quality)",
+    parameters: "12B",
+    size: "~8.1 GB",
+    family: "TranslateGemma",
+  },
+  {
     id: "qwen2.5:1.5b",
     name: "Qwen 2.5 1.5B (Non-thinking, Fast)",
     parameters: "1.5B",

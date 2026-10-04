@@ -25,6 +25,8 @@ const KNOWN_VALID_TAGS = new Set([
   "gemma4:e2b-it-qat",
   "gemma4:e4b-it-qat",
   "gemma4:12b-it-qat",
+  "translategemma:4b",
+  "translategemma:12b",
   "qwen2.5:1.5b",
   "qwen2.5:3b",
   "qwen3:1.7b",
@@ -37,8 +39,7 @@ const KNOWN_INVALID_TAGS = new Set([
   "gemma4:12b-qat",       // v0.4.2 bug — real tag is gemma4:12b-it-qat
   "gemma4:e2b-qat",       // missing -it- infix
   "gemma4:e4b-qat",       // missing -it- infix
-  "translategemma",       // doesn't exist on Ollama (only on HF)
-  "translategemma:12b",   // doesn't exist on Ollama
+  "hf.co/google/translategemma-4b-it:Q8_0",  // translategemma IS on Ollama natively
 ]);
 
 let pass = 0;
@@ -112,15 +113,24 @@ check(
   catalogTags.includes("gemma4:e4b-it-qat")
 );
 check(
-  "translategemma is NOT in the Ollama catalog (it's HF-only)",
-  !catalogTags.some((t) => t.startsWith("translategemma")),
-  "translategemma doesn't exist on Ollama — only on HuggingFace"
+  "translategemma:4b IS in the catalog (Ollama-native, verified 2026-10-04)",
+  catalogTags.includes("translategemma:4b"),
+  "must be present — translategemma IS on Ollama (was previously mis-verified as NOT FOUND)"
+);
+check(
+  "translategemma:12b IS in the catalog",
+  catalogTags.includes("translategemma:12b")
+);
+check(
+  "hf.co/google/translategemma is NOT in the catalog (use Ollama-native translategemma instead)",
+  !catalogTags.some((t) => t.includes("hf.co/google/translategemma")),
+  "translategemma exists natively on Ollama — no need for hf.co/ prefix"
 );
 
 console.log("\n── Catalog size sanity ──");
 
-check("Catalog has at least 8 models", catalogTags.length >= 8, `got ${catalogTags.length}`);
-check("Catalog has at most 15 models", catalogTags.length <= 15, `got ${catalogTags.length}`);
+check("Catalog has at least 10 models", catalogTags.length >= 10, `got ${catalogTags.length}`);
+check("Catalog has at most 18 models", catalogTags.length <= 18, `got ${catalogTags.length}`);
 
 // ════════════════════════════════════════════════════════════════════
 console.log("\n────────────────────────────────");

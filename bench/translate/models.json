@@ -91,15 +91,26 @@
       "verified": "2026-10-03 via huggingface.co/api/models/tencent/Hy-MT2-7B-GGUF (349k downloads, Apache-2.0)"
     },
     {
-      "ref": "hf.co/google/translategemma-4b-it:Q8_0",
+      "ref": "translategemma:4b",
       "family": "translategemma",
-      "source": "huggingface",
+      "source": "ollama",
       "promptProfile": "translategemma",
       "supportsThinkingOff": true,
       "licence": "Gemma Terms of Use (Google)",
-      "licenceNote": "TranslateGemma uses a specific prompt format: single user message, no system message. Glossary hints go into the user message.",
-      "size": "~4.0 GB",
-      "verified": "2026-10-03 via huggingface.co/api/models?search=translategemma (google/translategemma-4b-it exists, 37k downloads, not gated). NOTE: translategemma does NOT exist on Ollama registry — must use hf.co/ prefix."
+      "licenceNote": "TranslateGemma uses a specific prompt format: single user message, no system message. Glossary hints go into the user message. Built on Gemma 3, supports 55 languages.",
+      "size": "~3.3 GB",
+      "verified": "2026-10-04 via ollama.com/library/translategemma (tags: latest, 4b, 12b, 27b) + registry.ollama.ai manifest (3.30 GB, 4 layers). Previously mis-verified as NOT FOUND due to a false 404 detection — the page HTML contains '404' in a script path, not as a status code."
+    },
+    {
+      "ref": "translategemma:12b",
+      "family": "translategemma",
+      "source": "ollama",
+      "promptProfile": "translategemma",
+      "supportsThinkingOff": true,
+      "licence": "Gemma Terms of Use (Google)",
+      "licenceNote": "Same as 4B. 128K context window.",
+      "size": "~8.1 GB",
+      "verified": "2026-10-04 via registry.ollama.ai manifest (8.11 GB, 4 layers)"
     },
     {
       "ref": "gemini-3.8-flash",
