@@ -57,6 +57,8 @@ jobs:
       - run: npx tsx scripts/test-export.ts
       # v0.4.2 smoke tests
       - run: npx tsx scripts/test-ollama-pwa.ts
+      # v0.4.3 smoke tests
+      - run: npx tsx bench/translate/test-bench.ts
       - run: npm run build
 
   # ─────────────────────────────────────────────────────────────────

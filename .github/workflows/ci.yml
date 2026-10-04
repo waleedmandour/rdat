@@ -63,6 +63,9 @@ jobs:
       - name: Run Ollama PWA test suite (v0.4.2)
         run: npx tsx scripts/test-ollama-pwa.ts
 
+      - name: Run bench test suite (v0.4.3)
+        run: npx tsx bench/translate/test-bench.ts
+
       - name: Vite production build
         run: npm run build
 

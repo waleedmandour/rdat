@@ -2,26 +2,26 @@
 
 **Professional Bidirectional English↔Arabic Computer-Assisted Translation (CAT) Environment**
 
-[![Version](https://img.shields.io/badge/Version-0.4.2-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.4.2)
+[![Version](https://img.shields.io/badge/Version-0.4.3-6366f1?logo=semver&logoColor=white)](https://github.com/waleedmandour/rdat/releases/tag/v0.4.3)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Tauri 2](https://img.shields.io/badge/Tauri-2.x-FFC131?logo=tauri&logoColor=white)](https://v2.tauri.app)
 [![Ollama](https://img.shields.io/badge/Ollama-Local_LLM-22c55e?logo=ollama&logoColor=white)](https://ollama.com)
 [![PWA Ready](https://img.shields.io/badge/PWA-Optional-6366f1?logo=pwa&logoColor=white)](https://github.com/waleedmandour/rdat)
 [![CI](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml/badge.svg)](https://github.com/waleedmandour/rdat/actions/workflows/ci.yml)
 
-### Download v0.4.2
+### Download v0.4.3
 
 | Platform | Artifact | Size |
 |----------|----------|------|
-| **Windows** (x64) | [RDAT.Copilot_0.4.2_x64-setup.exe](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_x64-setup.exe) | ~6 MB |
-| **macOS** (Apple Silicon) | [RDAT.Copilot_0.4.2_aarch64.dmg](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_aarch64.dmg) | ~10 MB |
-| **macOS** (Intel) | [RDAT.Copilot_0.4.2_x64.dmg](https://github.com/waleedmandour/rdat/releases/tag/v0.4.2) | — |
-| **Linux** (.deb) | [RDAT.Copilot_0.4.2_amd64.deb](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_amd64.deb) | ~7 MB |
-| **Linux** (.rpm) | [RDAT.Copilot-0.4.2-1.x86_64.rpm](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot-0.4.2-1.x86_64.rpm) | ~7 MB |
-| **Linux** (.AppImage) | [RDAT.Copilot_0.4.2_amd64.AppImage](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/RDAT.Copilot_0.4.2_amd64.AppImage) | ~84 MB |
-| **PWA** (browser) | [rdat-v0.4.2-pwa.zip](https://github.com/waleedmandour/rdat/releases/download/v0.4.2/rdat-v0.4.2-pwa.zip) | ~4 MB |
+| **Windows** (x64) | [RDAT.Copilot_0.4.3_x64-setup.exe](https://github.com/waleedmandour/rdat/releases/download/v0.4.3/RDAT.Copilot_0.4.3_x64-setup.exe) | ~6 MB |
+| **macOS** (Apple Silicon) | [RDAT.Copilot_0.4.3_aarch64.dmg](https://github.com/waleedmandour/rdat/releases/download/v0.4.3/RDAT.Copilot_0.4.3_aarch64.dmg) | ~10 MB |
+| **macOS** (Intel) | [RDAT.Copilot_0.4.3_x64.dmg](https://github.com/waleedmandour/rdat/releases/tag/v0.4.3) | — |
+| **Linux** (.deb) | [RDAT.Copilot_0.4.3_amd64.deb](https://github.com/waleedmandour/rdat/releases/download/v0.4.3/RDAT.Copilot_0.4.3_amd64.deb) | ~7 MB |
+| **Linux** (.rpm) | [RDAT.Copilot-0.4.3-1.x86_64.rpm](https://github.com/waleedmandour/rdat/releases/download/v0.4.3/RDAT.Copilot-0.4.3-1.x86_64.rpm) | ~7 MB |
+| **Linux** (.AppImage) | [RDAT.Copilot_0.4.3_amd64.AppImage](https://github.com/waleedmandour/rdat/releases/download/v0.4.3/RDAT.Copilot_0.4.3_amd64.AppImage) | ~84 MB |
+| **PWA** (browser) | [rdat-v0.4.3-pwa.zip](https://github.com/waleedmandour/rdat/releases/download/v0.4.3/rdat-v0.4.3-pwa.zip) | ~4 MB |
 
-> v0.4.2 is a **pre-release**. See [What's New in v0.4.2](#whats-new-in-v042) below.
+> v0.4.3 is a **pre-release**. See [What's New in v0.4.3](#whats-new-in-v043) below.
 
 ---
 
@@ -177,6 +177,42 @@ Three translation pipeline modes are available, selectable via the Models panel:
 ### Translation Direction
 
 A direction toggle at the top of the editor lets you switch between **EN to AR** (English to Arabic, default) and **AR to EN** (Arabic to English). The direction is stored in the workspace state and persists across sessions.
+
+---
+
+## What's New in v0.4.3
+
+**Released 2026-10-03** — [Pre-release](https://github.com/waleedmandour/rdat/releases/tag/v0.4.3). Five fixes from the v0.4.2 review + a translation benchmark harness. All gates green (lint clean, 552/552 tests pass — 484 app + 68 bench, vite build OK).
+
+### Ollama tag corrections + registry validator
+
+Corrected `gemma4:12b-qat` (invalid) → **`gemma4:12b-it-qat`** (verified live against the Ollama registry, 7.15 GB). Added `gemma4:e2b-it-qat` and `gemma4:e4b-it-qat`. New `scripts/check-ollama-catalog.ts` validates every catalog tag against the live registry (skips cleanly offline). New `scripts/test-ollama-catalog.ts` uses a fixture (not the same constant) — catches the v0.4.2 bug class. All 10 tags verified valid.
+
+### PWA Ollama connection is now opt-in
+
+The PWA no longer probes `localhost:11434` on boot (Chrome 142+ shows a Local Network Access permission prompt for every visitor). A "Connect to local Ollama" card in the Models panel lets the user opt in. Error classification distinguishes: not-running, CORS (`OLLAMA_ORIGINS`), Chrome LNA denial, mixed-content block. The app shows its own exact origin (`window.location.origin`) in the setup instructions — no more `OLLAMA_ORIGINS=*` recommendation (warned against: lets any site call local Ollama).
+
+### Windows/Tauri pull: no-timeout client for multi-GB pulls
+
+The 300s (5-minute) inference client timeout was killing multi-GB pulls (`gemma4:12b-it-qat` at 7.2 GB takes ~24 min at 5 MB/s). New `ollama_pull_client()` with `connect_timeout(10s)` + `timeout(None)`. Safe because the streaming NDJSON response keeps the connection alive + progress events prove liveness + the user can cancel from the UI.
+
+### Gemini 3.8 Flash thinking: LOW for ghost text
+
+`gemini-3.8-flash` supports `thinkingLevel` low/medium/high (NOT minimal — errors). Default is medium, which wastes tokens on reasoning for simple translation. v0.4.3 sets `thinkingConfig.thinkingLevel: "LOW"` for all ghost-text calls (burst + full) across the Rust proxy, Vercel functions, and dev server. Tutor calls use default (medium) for pedagogical reasoning. Verified against Google's docs.
+
+### Model profiles + "Show all" toggle
+
+New `src/lib/model-profiles.ts` with pattern-based settings: gemma4 + qwen3 disable thinking (`think: false`); translategemma uses a single user message (no system message) with glossary hints folded in. "Show all" toggle in the Models panel bypasses the hidden-model filter (embedding/vision/code models). The filter never hides a model the user has loaded or selected.
+
+### Translation benchmark harness
+
+New `bench/translate/` directory with a complete evaluation harness:
+- **10 candidates** (all verified live): gemma4 QAT (e4b + 12b), qwen3.5 (4b + 9b), Tencent HY-MT1.5 (1.8B + 7B), Tencent Hy-MT2 (1.8B + 7B), TranslateGemma 4B, Gemini 3.8 Flash (cloud anchor)
+- **3 datasets**: FLORES+ (gated, CC BY-SA 4.0), WMT24++ (en-ar_EG/SA, Apache-2.0), domain (synthetic sample with glossary terms)
+- **2 conditions**: C1-native (official prompt formats) + C2-rdat-rag (RDAT's own builders with glossary)
+- **Metrics**: chrF++ (sacrebleu), BLEU (secondary), Arabic-normalized chrF, paired bootstrap CIs, optional COMET, 8 compliance checks, glossary adherence with clitic/article tolerance
+- **Privacy**: domain data never goes to cloud unless `--allow-cloud-domain`. No dataset files committed.
+- **68 unit tests** (no network, no Ollama): normalizer, adherence, compliance, aggregator, prompt profiles, models.json structure
 
 ---
 
