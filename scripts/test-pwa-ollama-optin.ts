@@ -106,7 +106,15 @@ check("AiModelsView has diagnostics card when opt-in fails", /Could not connect 
 console.log("\n── README no longer recommends OLLAMA_ORIGINS=* ──");
 
 const readmeSrc = fs.readFileSync(path.resolve("README.md"), "utf8");
-check("README does NOT recommend OLLAMA_ORIGINS=* as the primary instruction", !/set.*OLLAMA_ORIGINS=\*/i.test(readmeSrc.replace(/do NOT use.*\*/i, "").replace(/لا تستخدم.*\*/i, "")));
+check("README does NOT recommend OLLAMA_ORIGINS=* as the primary instruction", (() => {
+  // Strip warning/negation sentences before checking
+  const cleaned = readmeSrc
+    .replace(/no more.*OLLAMA_ORIGINS=\*.*recommendation/gi, "")
+    .replace(/do NOT use.*OLLAMA_ORIGINS=\*/gi, "")
+    .replace(/لا تستخدم.*OLLAMA_ORIGINS=\*/gi, "")
+    .replace(/warned against.*OLLAMA_ORIGINS=\*/gi, "");
+  return !/set.*OLLAMA_ORIGINS=\*/i.test(cleaned);
+})());
 check("README recommends exact origin", /setx OLLAMA_ORIGINS/.test(readmeSrc));
 check("README warns against *", /not\s+`?\*`?|do NOT use|لا تستخدم/i.test(readmeSrc));
 

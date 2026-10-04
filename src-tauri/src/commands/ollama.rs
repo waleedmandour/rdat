@@ -102,8 +102,11 @@ fn ollama_pull_client() -> reqwest::Client {
     reqwest::Client::builder()
         .no_proxy()
         .connect_timeout(Duration::from_secs(10))
-        // No total timeout — pulls can take 30+ minutes for large models
-        .timeout(None)
+        // No .timeout() call = no total timeout. Pulls can take 30+
+        // minutes for large models (gemma4:12b-it-qat at 7.2 GB).
+        // Safe because the streaming NDJSON response keeps the
+        // connection alive + progress events prove liveness + the
+        // user can cancel from the UI (dropping the future).
         .build()
         .expect("failed to build reqwest pull client for Ollama")
 }
@@ -617,7 +620,7 @@ fn strip_thinking_from_content(text: &str) -> String {
     // Strip <think>...</think> tags if present
     let without_think_tags = if trimmed.contains("<think>") {
         // Remove everything between <think> and </think> (inclusive)
-        let mut result = String::new();
+        let result = String::new();
         let mut in_think = false;
         let mut buffer = String::new();
         for c in trimmed.chars() {
